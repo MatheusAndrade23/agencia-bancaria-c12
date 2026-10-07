@@ -41,7 +41,10 @@ export function App() {
     }
   }, [])
 
-  function saveScenario(name: string) {
+  /** Salva a configuração atual como "Cenário N", com o próximo número livre. */
+  function saveScenario() {
+    const used = scenarios.map((s) => Number(/^Cenário (\d+)$/.exec(s.name)?.[1] ?? 0))
+    const name = `Cenário ${Math.max(0, ...used) + 1}`
     setScenarios(storage.saveScenario({ id: scenarioId(config), name, config, savedAt: new Date().toISOString() }))
   }
 

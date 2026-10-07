@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { LIMITS, PRESETS, scenarioId } from '../sim/queue'
 import {
   OPS, accountName, formatMoney,
@@ -13,7 +13,7 @@ interface Props {
   scenarios: SavedScenario[]
   disabled: boolean
   onChange(config: ScenarioConfig): void
-  onSaveScenario(name: string): void
+  onSaveScenario(): void
   onDeleteScenario(name: string): void
 }
 
@@ -51,7 +51,6 @@ function Field({ label, value, min, max, step = 1, suffix, disabled, onChange }:
 /** Configuração do cenário, presets, cenários salvos e a fila gerada. */
 export function ConfigPanel(props: Props) {
   const { config, clients, scenarioName, scenarios, disabled, onChange } = props
-  const [name, setName] = useState('')
   const set = (patch: Partial<ScenarioConfig>) => onChange({ ...config, ...patch })
   const setMix = (key: keyof OpMix, value: number) => onChange({ ...config, mix: { ...config.mix, [key]: value } })
   const mixTotal = OPS.reduce((sum, op) => sum + config.mix[op.key], 0)
@@ -133,19 +132,17 @@ export function ConfigPanel(props: Props) {
         )}
 
         <h3>Cenários salvos</h3>
-        <form
-          className="save-row"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (name.trim()) props.onSaveScenario(name.trim())
-            setName('')
-          }}
-        >
-          <input type="text" placeholder="Nome do cenário" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
-          <button type="submit" className="btn btn-small" disabled={!name.trim()}>
-            Salvar
+        <div className="save-row">
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={scenarios.some((scenario) => scenario.id === id)}
+            title="Salva a configuração atual como Cenário 1, 2, 3…"
+            onClick={props.onSaveScenario}
+          >
+            Salvar cenário atual
           </button>
-        </form>
+        </div>
         {scenarios.length === 0 ? (
           <p className="muted small">Nenhum cenário salvo ainda.</p>
         ) : (
