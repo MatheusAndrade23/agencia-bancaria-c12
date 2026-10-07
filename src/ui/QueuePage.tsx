@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { previewSchedule } from '../sim/preview'
 import { scenarioId } from '../sim/queue'
 import {
-  ALGORITHMS, ALGORITHM_LABEL, OPS, OP_TRANSFER, accountName, formatMoney,
+  OPS, OP_TRANSFER, accountName, formatMoney,
   type Client, type ScenarioConfig,
 } from '../sim/types'
 import { PALETTE, formatMs, formatNumber, sequentialInk } from './theme'
@@ -24,10 +23,6 @@ function clientTitle(client: Client): string {
     `${OPS[client.op].label} · ${formatMoney(client.amount)} · conta ${accounts}\n` +
     `chega em ${formatMs(client.arrivalUs / 1000)} · dura ${formatMs(client.durationUs / 1000)}`
   )
-}
-
-function mean(values: number[]): number {
-  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
 }
 
 /** Chip pequeno de um cliente: cor = operação, estrela = preferencial. */
@@ -109,17 +104,6 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
     for (let a = 0; a < config.accounts; a++) for (let b = a + 1; b < config.accounts; b++) if (matrix[a][b] > 0 && matrix[b][a] > 0) crossed++
     return { matrix, crossed, max: Math.max(1, ...matrix.flat()), total: matrix.flat().reduce((a, b) => a + b, 0) }
   }, [clients, config.accounts])
-
-  const previews = useMemo(
-    () =>
-      ALGORITHMS.map((algorithm) => {
-        const slots = previewSchedule(config, clients, algorithm)
-        const wait = (priority?: number) =>
-          mean(slots.filter((s) => priority === undefined || clients[s.index].priority === priority).map((s) => (s.startUs - clients[s.index].arrivalUs) / 1000))
-        return { algorithm, slots, waitAll: wait(), waitPref: wait(1), waitCommon: wait(0) }
-      }),
-    [config, clients],
-  )
 
   const ramp = PALETTE.sequential
   const pressureText =
@@ -275,34 +259,6 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
           )}
         </section>
       </div>
-
-      <section className="panel">
-        <header className="panel-header">
-          <h2>Ordem prevista de atendimento</h2>
-          <span className="muted">a mesma fila, na ordem em que cada algoritmo chamaria os clientes</span>
-        </header>
-        <div className="previews">
-          {previews.map((preview) => (
-            <div key={preview.algorithm} className="preview-row">
-              <div className="preview-head">
-                <strong>{ALGORITHM_LABEL[preview.algorithm]}</strong>
-                <span className="muted small">
-                  espera média prevista {formatMs(preview.waitAll)} · ★ {formatMs(preview.waitPref)} · comuns {formatMs(preview.waitCommon)}
-                </span>
-              </div>
-              <div className="preview-chips">
-                {preview.slots.map((slot) => (
-                  <MiniChip key={slot.index} client={clients[slot.index]} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="muted small">
-          Previsão em condições ideais, com {config.tellers} caixas e sem disputa por lock. Na execução real a ordem pode
-          mudar um pouco, porque depende do instante exato em que cada thread fica livre.
-        </p>
-      </section>
 
       <section className="panel">
         <header className="panel-header">

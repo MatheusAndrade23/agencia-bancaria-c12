@@ -83,7 +83,7 @@ A fila é gerada por um PRNG com semente (mulberry32, em `src/sim/rng.ts`). A me
 
 O app tem três abas, na ordem de uso: **Cenário e fila** (configurar e ver a fila), **Simulação** (rodar) e **Comparações** (analisar os resultados).
 
-A aba **Cenário e fila** mostra a fila gerada antes de rodar, atualizada a cada mudança na configuração: as chegadas ao longo do tempo, a composição por tipo de operação e prioridade, a matriz de transferências entre contas (com os pares cruzados que podem dar deadlock) e a ordem em que cada algoritmo chamaria os clientes.
+A aba **Cenário e fila** mostra a fila gerada antes de rodar, atualizada a cada mudança na configuração: as chegadas ao longo do tempo, a composição por tipo de operação e prioridade, a matriz de transferências entre contas (com os pares cruzados que podem dar deadlock) e a lista de todos os clientes.
 
 Presets prontos:
 
@@ -179,7 +179,7 @@ Cada execução registra: makespan, espera na fila (média, mínima e máxima), 
 
 ## Roteiro sugerido de demonstração
 
-1. **Conhecer a fila.** Na aba **Cenário e fila**, escolha o preset *Padrão* e mostre as chegadas e compare a ordem prevista de cada algoritmo sobre os mesmos clientes.
+1. **Conhecer a fila.** Na aba **Cenário e fila**, escolha o preset *Padrão* e mostre as chegadas ao longo do tempo, a composição da fila e as transferências entre contas.
 2. **Conhecer a simulação.** Na aba **Simulação**, FCFS, lock por cofre ordenado, velocidade 0,1×. Clique em **Iniciar** e acompanhe a fila, os caixas, os cadeados nos cofres e o Gantt. A invariante fica verde até o fim.
 3. **Race condition.** Preset *Corrida*, modo **Sem lock**. O painel da invariante fica vermelho no meio da execução e os cofres mostram "deveria ser R$ ...". Rode de novo: o valor inconsistente muda a cada vez, porque depende de como o sistema operacional intercala as threads.
 4. **Corrigir com lock.** Mesmo cenário com **Lock global** e depois **Por cofre (ordenado)**. Os dois fecham a invariante em zero. Compare o makespan e o tempo esperando lock: o global serializa todo mundo, o por cofre deixa contas diferentes andarem em paralelo.
@@ -205,7 +205,6 @@ src/
     watchdog.ts     grafo de espera e detecção de deadlock
     timeline.ts     registro da execução e estado da agência em um instante
     metrics.ts      cálculo das métricas
-    preview.ts      previsão da ordem de atendimento (usada na tela da fila)
     engine.ts       sobe os workers, roda o watchdog e monta o resultado
     *.test.ts       testes unitários
   workers/

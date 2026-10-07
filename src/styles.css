@@ -267,7 +267,4 @@ th.num, td.num { text-align: right; }
 .stack-bar .bar-common { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .transfer-matrix td { min-width: 54px; padding: 8px; }
 .transfer-matrix thead th:first-child { text-align: right; font-weight: 400; color: var(--text-muted); }
-.previews { display: flex; flex-direction: column; gap: 14px; }
-.preview-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 5px; }
-.preview-chips { display: flex; flex-wrap: wrap; gap: 3px; }
 .queue-table-full { max-height: 560px; }
