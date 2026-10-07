@@ -96,6 +96,12 @@ Presets prontos:
 
 A execução acontece em tempo real, na velocidade das threads. Os workers registram na memória compartilhada os instantes de cada evento (início e fim de atendimento, espera e posse de lock, cada escrita de saldo), e a tela é desenhada como uma função pura de (registro, instante). Por isso o controle de velocidade, a pausa e a barra de tempo só mudam o que é exibido: as métricas vêm sempre do tempo real medido pelos workers.
 
+### Tela cheia
+
+Na aba **Simulação**, a caixa **Tela cheia** troca os painéis por um palco: as pessoas entram pela porta, esperam na fila, andam até o caixa e saem; o dinheiro voa entre os cofres e os caixas; e linhas ligam cada caixa ao cadeado que ele tem (contínua) ou espera (tracejada). `Esc` volta à visualização normal.
+
+Cada pessoa na fila tem uma barrinha de paciência e um rosto que piora com a espera (🙂 😐 😒 😠 🤬). A paciência vale quatro atendimentos médios do cenário. O painel **Starvation**, no topo, mostra a maior espera do momento, quantos estão irritados e a espera média de preferenciais e comuns.
+
 ## Algoritmos de escalonamento
 
 Todos são **não-preemptivos**: quando um caixa fica livre, ele escolhe o próximo entre os clientes que já chegaram e atende até o fim. As funções ficam em `src/sim/scheduler.ts` e são puras, por isso testáveis.
@@ -212,7 +218,7 @@ src/
   storage/
     storage.ts      persistência no localStorage
   ui/
-    SimulationPage, ConfigPanel, QueuePage, Fila, Caixas, Cofres, Gantt,
+    SimulationPage, Palco (tela cheia), ConfigPanel, QueuePage, Fila, Caixas, Cofres, Gantt,
     DeadlockPanel, MetricsSummary, Comparacoes, ComparisonCharts
 ```
 

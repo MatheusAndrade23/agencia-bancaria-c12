@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { startRun, type RunHandle } from '../sim/engine'
 import { scenarioId } from '../sim/queue'
 import { viewAt, type AgencyView } from '../sim/timeline'
 import {
   ALGORITHMS, ALGORITHM_LABEL, LOCK_MODES, LOCK_MODE_LABEL,
-  type Algorithm, type Client, type LockMode, type RunRecord, type ScenarioConfig, type Timeline,
+  type Algorithm, type Client, type ClientTrace, type LockMode, type RunRecord, type ScenarioConfig, type Timeline,
 } from '../sim/types'
 import { Caixas } from './Caixas'
 import { Cofres } from './Cofres'
@@ -12,6 +12,7 @@ import { DeadlockPanel } from './DeadlockPanel'
 import { Fila } from './Fila'
 import { Gantt } from './Gantt'
 import { MetricsSummary, StatusBadge } from './MetricsSummary'
+import { Palco } from './Palco'
 import { formatMs } from './theme'
 
 interface Props {
@@ -27,6 +28,8 @@ interface Props {
 
 interface Frame {
   tUs: number
+  /** duração das animações de dinheiro, em µs do tempo da simulação */
+  fxUs: number
   liveUs: number
   timeline: Timeline
   view: AgencyView
@@ -58,6 +61,48 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
   const [paused, setPaused] = useState(false)
   const [error, setError] = useState('')
   const [frame, setFrame] = useState<Frame | null>(null)
+  const [stage, setStage] = useState(false)
+
+  // Tela cheia: o palco cobre a página e tenta usar o fullscreen do navegador.
+  // Esc sai dos dois jeitos (o navegador trata o Esc do fullscreen; o keydown cobre o resto).
+  function enterStage() {
+    setStage(true)
+    document.documentElement.requestFullscreen?.().catch(() => undefined)
+  }
+  function leaveStage() {
+    setStage(false)
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined)
+  }
+  useEffect(() => {
+    if (!stage) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') leaveStage()
+    }
+    let wasFullscreen = !!document.fullscreenElement
+    const onFullscreenChange = () => {
+      if (wasFullscreen && !document.fullscreenElement) setStage(false)
+      wasFullscreen = !!document.fullscreenElement
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+    }
+  }, [stage])
+
+  // antes da primeira execução, o palco mostra a agência vazia
+  const idleFrame = useMemo<Frame>(() => {
+    const blank: ClientTrace = { teller: -1, startUs: 0, endUs: 0, result: 0, lock1: -1, wait1Us: 0, acq1Us: 0, lock2: -1, wait2Us: 0, acq2Us: 0, releaseUs: 0 }
+    const timeline: Timeline = {
+      endUs: 0,
+      clients: clients.map(() => blank),
+      writes: [],
+      balances: new Array<number>(config.accounts).fill(config.initialBalance),
+      finished: false,
+    }
+    return { tUs: -1, fxUs: 0, liveUs: 0, timeline, view: viewAt(config, clients, timeline, -1, undefined, 0) }
+  }, [config, clients])
 
   // posição da reprodução; fica em ref para o laço de animação não depender do React
   const playback = useRef({ tUs: 0, speed: 0.1, paused: false })
@@ -87,6 +132,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
         const fxUs = MONEY_FX_MS * 1000 * (Number.isFinite(p.speed) ? p.speed : 1)
         setFrame({
           tUs: p.tUs,
+          fxUs,
           liveUs,
           timeline,
           view: viewAt(handle.config, handle.clients, timeline, p.tUs, handle.deadlock(), fxUs),
@@ -105,6 +151,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
     playback.current.tUs = 0
     setPaused(false)
     setRecord(null)
+    setFrame(null) // o quadro antigo pertence à execução anterior
     setHandle(run)
     const result = await run.finished
     setRecord(result)
@@ -167,26 +214,8 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
   const deadlock = shown?.deadlock()
   const atEnd = !!frame && !!status && frame.tUs >= frame.liveUs
 
-  return (
-    <div className="sim">
-      <section className="panel scenario-strip">
-        <div>
-          <span className="muted small">Cenário</span>
-          <strong>
-            {scenarioName} <code>{scenarioId(config)}</code>
-          </strong>
-        </div>
-        <span className="muted">
-          {config.tellers} caixas · {config.accounts} contas · {clients.length} clientes ({clients.filter((c) => c.priority === 1).length}{' '}
-          preferenciais) · janela crítica {config.criticalWindowMs} ms · seed {config.seed}
-        </span>
-        <span className="spacer" />
-        <button type="button" className="btn btn-small" disabled={running} onClick={onEditScenario}>
-          ✎ Editar cenário e ver a fila
-        </button>
-      </section>
-
-      <section className="panel controls">
+  const runControls = (
+    <>
         <label className="field">
           <span>Escalonamento</span>
           <select value={algorithm} disabled={running} onChange={(e) => setAlgorithm(e.target.value as Algorithm)}>
@@ -224,6 +253,9 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
             ⏩ Rodar as 16 combinações
           </button>
         </div>
+    </>
+  )
+  const speedControl = (
         <div className="field speed">
           <span>Velocidade da animação (não altera o benchmark)</span>
           <div className="segmented">
@@ -242,6 +274,112 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
             ))}
           </div>
         </div>
+  )
+  const playbackInfo = frame && shown && (
+            <div className="playback-info">
+              <strong>
+                {ALGORITHM_LABEL[shown.algorithm]} × {LOCK_MODE_LABEL[shown.lockMode]}
+              </strong>
+              {status ? <StatusBadge status={status} /> : <span className="status status-running">● Executando</span>}
+              <span className="muted">
+                t = {formatMs(frame.tUs / 1000)} de {formatMs(frame.liveUs / 1000)}
+              </span>
+              {deadlock && !frame.view.deadlockVisible && (
+                <span className="status status-deadlock">☠ deadlock em {formatMs(deadlock.atUs / 1000)} (a animação chega lá)</span>
+              )}
+            </div>
+  )
+  const playbackControls = frame && (
+            <div className="playback-controls">
+              <button type="button" className="btn btn-small" onClick={() => setPaused(!paused)} disabled={atEnd}>
+                {paused ? '▶ Continuar' : '⏸ Pausar'}
+              </button>
+              <button type="button" className="btn btn-small" onClick={replay}>
+                ↺ Rever do início
+              </button>
+              <button type="button" className="btn btn-small" onClick={() => seek(frame.liveUs)} disabled={atEnd}>
+                ⏭ Ir para o fim
+              </button>
+              <input
+                type="range"
+                className="scrubber"
+                min={0}
+                max={Math.max(1, frame.liveUs)}
+                value={frame.tUs}
+                onChange={(e) => seek(Number(e.target.value))}
+                aria-label="Posição na linha do tempo"
+              />
+            </div>
+  )
+
+  if (stage) {
+    const current = shown && frame ? frame : idleFrame
+    return (
+      <div className="sim">
+        <Palco
+          config={shown?.config ?? config}
+          clients={shown?.clients ?? clients}
+          lockMode={shown?.lockMode ?? lockMode}
+          timeline={current.timeline}
+          view={current.view}
+          tUs={current.tUs}
+          fxUs={current.fxUs}
+          deadlock={deadlock}
+          header={
+            playbackInfo ?? (
+              <div className="playback-info">
+                <strong>🏦 {scenarioName}</strong>
+                <span className="muted">escolha o algoritmo e o sincronismo e clique em Iniciar</span>
+              </div>
+            )
+          }
+          footer={
+            <>
+              {error && <span className="bad">Erro: {error}</span>}
+              {batch && (
+                <span className="status status-running">
+                  combinação {batch.done + 1}/{batch.total}
+                </span>
+              )}
+              {runControls}
+              {speedControl}
+              {playbackControls}
+              <button type="button" className="btn btn-small" onClick={leaveStage}>
+                ✕ Sair da tela cheia (Esc)
+              </button>
+            </>
+          }
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="sim">
+      <section className="panel scenario-strip">
+        <div>
+          <span className="muted small">Cenário</span>
+          <strong>
+            {scenarioName} <code>{scenarioId(config)}</code>
+          </strong>
+        </div>
+        <span className="muted">
+          {config.tellers} caixas · {config.accounts} contas · {clients.length} clientes ({clients.filter((c) => c.priority === 1).length}{' '}
+          preferenciais) · janela crítica {config.criticalWindowMs} ms · seed {config.seed}
+        </span>
+        <span className="spacer" />
+        <button type="button" className="btn btn-small" disabled={running} onClick={onEditScenario}>
+          ✎ Editar cenário e ver a fila
+        </button>
+      </section>
+
+      <section className="panel controls">
+        {runControls}
+        <label className="check" title="Mostra a agência em tela cheia, com as pessoas andando da fila até os caixas. Esc para sair.">
+          <input type="checkbox" checked={stage} onChange={(e) => (e.target.checked ? enterStage() : leaveStage())} />
+          🖥 Tela cheia
+        </label>
+        {speedControl}
       </section>
 
       {error && <div className="banner banner-error">Erro ao executar: {error}</div>}
@@ -263,38 +401,8 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
       ) : (
         <>
           <section className="panel playback">
-            <div className="playback-info">
-              <strong>
-                {ALGORITHM_LABEL[shown.algorithm]} × {LOCK_MODE_LABEL[shown.lockMode]}
-              </strong>
-              {status ? <StatusBadge status={status} /> : <span className="status status-running">● Executando</span>}
-              <span className="muted">
-                t = {formatMs(frame.tUs / 1000)} de {formatMs(frame.liveUs / 1000)}
-              </span>
-              {deadlock && !frame.view.deadlockVisible && (
-                <span className="status status-deadlock">☠ deadlock em {formatMs(deadlock.atUs / 1000)} (a animação chega lá)</span>
-              )}
-            </div>
-            <div className="playback-controls">
-              <button type="button" className="btn btn-small" onClick={() => setPaused(!paused)} disabled={atEnd}>
-                {paused ? '▶ Continuar' : '⏸ Pausar'}
-              </button>
-              <button type="button" className="btn btn-small" onClick={replay}>
-                ↺ Rever do início
-              </button>
-              <button type="button" className="btn btn-small" onClick={() => seek(frame.liveUs)} disabled={atEnd}>
-                ⏭ Ir para o fim
-              </button>
-              <input
-                type="range"
-                className="scrubber"
-                min={0}
-                max={Math.max(1, frame.liveUs)}
-                value={frame.tUs}
-                onChange={(e) => seek(Number(e.target.value))}
-                aria-label="Posição na linha do tempo"
-              />
-            </div>
+            {playbackInfo}
+            {playbackControls}
           </section>
 
           {deadlock && frame.view.deadlockVisible && <DeadlockPanel deadlock={deadlock} accounts={shown.config.accounts} />}
