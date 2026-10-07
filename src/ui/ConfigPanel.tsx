@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { LIMITS, PRESETS, scenarioId } from '../sim/queue'
 import { OPS, type OpMix, type SavedScenario, type ScenarioConfig } from '../sim/types'
+import { formatMs } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -48,6 +49,7 @@ export function ConfigPanel(props: Props) {
   const { config, scenarioName, scenarios, disabled, onChange } = props
   const set = (patch: Partial<ScenarioConfig>) => onChange({ ...config, ...patch })
   const setMix = (key: keyof OpMix, value: number) => onChange({ ...config, mix: { ...config.mix, [key]: value } })
+  const slowest = OPS.reduce((a, b) => (b.baseMs > a.baseMs ? b : a))
   const mixTotal = OPS.reduce((sum, op) => sum + config.mix[op.key], 0)
   const id = useMemo(() => scenarioId(config), [config])
 
@@ -99,12 +101,16 @@ export function ConfigPanel(props: Props) {
           <Field label="Semente (seed)" value={config.seed} min={0} max={4294967295} disabled={disabled} onChange={(v) => set({ seed: v })} />
         </div>
 
-        <h3>Tipos de operação (%)</h3>
+        <h3>Tipos de operação (% da fila)</h3>
         <div className="mix-grid">
           {OPS.map((op) => (
             <label key={op.key} className={`mix op-${op.key}`}>
               <span>
-                <span aria-hidden>{op.icon}</span> {op.label}
+                <span aria-hidden>{op.icon}</span> {op.label}{' '}
+                <span className="muted small">
+                  ~{formatMs((op.baseMs * config.durationScalePct) / 100)}
+                  {op === slowest && ' · mais lenta'}
+                </span>
               </span>
               <input
                 type="number"

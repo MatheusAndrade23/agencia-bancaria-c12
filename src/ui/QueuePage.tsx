@@ -92,9 +92,17 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
     const workUs = clients.reduce((sum, c) => sum + c.durationUs + config.criticalWindowMs * 1000, 0)
     const spanUs = clients[clients.length - 1]?.arrivalUs ?? 0
     const counts = OPS.map((_, op) => clients.filter((c) => c.op === op).length)
+    // duração média de atendimento de cada operação nesta fila, da mais demorada para a mais rápida
+    const durations = OPS.map((op, i) => {
+      const mine = clients.filter((c) => c.op === i)
+      const avgMs = mine.length ? mine.reduce((sum, c) => sum + c.durationUs, 0) / mine.length / 1000 : 0
+      return { op, count: mine.length, avgMs, totalMs: avgMs * mine.length }
+    })
+      .filter((d) => d.count > 0)
+      .sort((a, b) => b.avgMs - a.avgMs)
     // quanto trabalho chega por unidade de tempo, comparado ao que os caixas conseguem atender
     const pressure = spanUs > 0 ? workUs / config.tellers / spanUs : Infinity
-    return { preferential, workUs, spanUs, counts, pressure }
+    return { preferential, workUs, spanUs, counts, durations, pressure }
   }, [clients, config])
 
   const transfers = useMemo(() => {
@@ -193,6 +201,27 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
               ) : null,
             )}
           </div>
+          <h3>Duração média por operação</h3>
+          <div className="duration-bars">
+            {stats.durations.map((d, i) => (
+              <div key={d.op.key} className={`duration-row op-${d.op.key}`} title={`${d.count} na fila · ${formatMs(d.totalMs)} de atendimento somado`}>
+                <span className="duration-label">
+                  {d.op.icon} {d.op.label}
+                </span>
+                <span className="duration-track">
+                  <span className="duration-fill" style={{ width: `${(d.avgMs / stats.durations[0].avgMs) * 100}%` }} />
+                </span>
+                <span className="duration-value">
+                  <strong>{formatMs(d.avgMs)}</strong>
+                  {i === 0 && stats.durations.length > 1 && <span className="tag">mais demorada</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="muted small">
+            Tempo de atendimento antes da janela crítica de {config.criticalWindowMs} ms. É este valor que o SJF usa para
+            escolher o próximo cliente.
+          </p>
           <h3>Prioridade</h3>
           <div className="stack-bar" role="img" aria-label="Proporção de preferenciais e comuns">
             {stats.preferential > 0 && (
