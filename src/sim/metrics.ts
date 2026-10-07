@@ -21,6 +21,7 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
   const waitsPref: number[] = []
   const waitsCommon: number[] = []
   const turnarounds: number[] = []
+  const services: number[] = []
   const busyUs = new Array<number>(config.tellers).fill(0)
   let served = 0
   let refused = 0
@@ -37,6 +38,7 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
       served++
       if (trace.result === RESULT_REFUSED) refused++
       turnarounds.push((trace.endUs - client.arrivalUs) / 1000)
+      services.push((trace.endUs - trace.startUs) / 1000)
       lastEndUs = Math.max(lastEndUs, trace.endUs)
     }
   })
@@ -51,6 +53,15 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
   const realTotal = timeline.balances.reduce((a, b) => a + b, 0)
   const lockWaitMs = lockWaitUs(timeline, config.tellers).map((us) => us / 1000)
 
+  // Estabilidade: λ é a taxa de chegada na janela de chegadas e S o atendimento médio.
+  // Com c caixas, a fila só não cresce se ρ = λ·S / c < 1.
+  const arrivalSpanS = Math.max(0.001, (clients[clients.length - 1]?.arrivalUs ?? 0) / 1_000_000)
+  const arrivalRate = Math.max(1, clients.length - 1) / arrivalSpanS
+  const serviceAvgMs = mean(services)
+  const rho = (arrivalRate * (serviceAvgMs / 1000)) / config.tellers
+  // Teorema de Little (L = λ·W) no intervalo observado, onde λ é a vazão efetiva.
+  const throughput = served / (makespanUs / 1_000_000)
+
   return {
     makespanMs: makespanUs / 1000,
     total: clients.length,
@@ -63,7 +74,7 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
     waitCommonAvgMs: mean(waitsCommon),
     waitCommonMaxMs: waitsCommon.length ? Math.max(...waitsCommon) : 0,
     turnaroundAvgMs: mean(turnarounds),
-    throughput: served / (makespanUs / 1_000_000),
+    throughput,
     utilization: busyUs.map((us) => Math.min(100, (us / makespanUs) * 100)),
     lockWaitMs,
     lockWaitTotalMs: lockWaitMs.reduce((a, b) => a + b, 0),
@@ -71,6 +82,11 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
     realTotal,
     inconsistentCents: realTotal - expectedTotal,
     wrongAccounts: expected.filter((value, a) => value !== timeline.balances[a]).length,
+    arrivalRate,
+    serviceAvgMs,
+    rho,
+    littleL: throughput * (mean(turnarounds) / 1000),
+    littleLq: throughput * (mean(waits) / 1000),
   }
 }
 

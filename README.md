@@ -181,7 +181,28 @@ Ao detectar, o app encerra os workers, destaca em vermelho os caixas e as contas
 
 ## Métricas
 
-Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
+Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
+
+### Teorema de Little e estabilidade
+
+Ao final de cada execução o app aplica a teoria das filas aos valores medidos. Os resultados entram no benchmark: aparecem no resumo da execução, na tabela e na matriz da aba Comparações.
+
+**Dá para atender tudo?** A resposta vem da carga por caixa:
+
+```
+ρ = λ·S / c
+```
+
+onde λ é a taxa de chegada (clientes por segundo na janela de chegadas), S o tempo médio de atendimento medido e c o número de caixas. Se ρ < 1, os caixas dão conta do ritmo das chegadas. Se ρ ≥ 1, chega mais trabalho do que eles atendem e a fila cresce enquanto houver chegadas; o app informa quantos caixas seriam necessários. Como a fila do cenário é finita, a execução termina mesmo com ρ ≥ 1, só que com esperas longas.
+
+**Teorema de Little.** O número médio de clientes em um sistema é a taxa de vazão vezes o tempo médio que cada um passa nele:
+
+```
+L  = λ·W     clientes na agência (W = turnaround médio)
+Lq = λ·Wq    clientes na fila     (Wq = espera média)
+```
+
+Aqui λ é a vazão efetiva da execução inteira (clientes atendidos ÷ makespan). A diferença L − Lq é o número médio de caixas ocupados, que confere com a soma das utilizações.
 
 ## Roteiro sugerido de demonstração
 

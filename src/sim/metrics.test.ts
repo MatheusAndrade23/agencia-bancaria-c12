@@ -44,6 +44,17 @@ describe('métricas', () => {
     expect(m.lockWaitMs).toEqual([0, 10])
   })
 
+  it('aplica o Teorema de Little e a condição de estabilidade', () => {
+    const m = computeMetrics(config, clients, timeline)
+    expect(m.arrivalRate).toBeCloseTo(100) // 1 intervalo de 10 ms
+    expect(m.serviceAvgMs).toBe(50) // (40 + 60) / 2
+    expect(m.rho).toBeCloseTo(2.5) // 100/s × 0,05 s ÷ 2 caixas
+    expect(m.littleL).toBeCloseTo(1.5) // 20/s × 0,075 s
+    expect(m.littleLq).toBeCloseTo(0.5) // 20/s × 0,025 s
+    // L − Lq é o número médio de caixas ocupados
+    expect(m.littleL! - m.littleLq!).toBeCloseTo((m.utilization[0] + m.utilization[1]) / 100)
+  })
+
   it('a invariante fecha em zero quando os saldos batem', () => {
     const m = computeMetrics(config, clients, timeline)
     expect(m.expectedTotal).toBe(2500)

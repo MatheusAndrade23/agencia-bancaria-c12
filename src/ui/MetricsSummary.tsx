@@ -10,6 +10,68 @@ export function StatusBadge({ status }: { status: RunRecord['status'] }) {
   )
 }
 
+/** Teoria das filas aplicada à execução: estabilidade (ρ) e Teorema de Little (L = λ·W). */
+export function LittlePanel({ run, compact }: { run: RunRecord; compact?: boolean }) {
+  const m = run.metrics
+  if (m.rho === undefined || m.littleL === undefined || m.littleLq === undefined || m.arrivalRate === undefined || m.serviceAvgMs === undefined) return null
+  const stable = m.rho < 1
+  const tellers = run.config.tellers
+  return (
+    <div className={`little ${stable ? 'little-ok' : 'little-over'}`}>
+      <div className="little-verdict">
+        <span className="little-icon" aria-hidden>
+          {stable ? '✅' : '⚠️'}
+        </span>
+        <div>
+          <strong>
+            ρ = {formatNumber(m.rho, 2)} {stable ? '< 1: dá para atender tudo' : '≥ 1: não dá para atender no ritmo das chegadas'}
+          </strong>
+          <span className="small">
+            {stable
+              ? `Os ${tellers} caixas dão conta: usam em média ${formatNumber(m.rho * 100, 0)}% da capacidade.`
+              : `Chega ${formatNumber(m.rho, 1)}× mais trabalho do que ${tellers} caixas atendem. A fila cresce enquanto houver chegadas; seriam precisos pelo menos ${Math.floor(m.rho * tellers) + 1} caixas.`}
+          </span>
+        </div>
+      </div>
+      <dl className="little-formulas">
+        <div>
+          <dt>Carga por caixa</dt>
+          <dd>
+            ρ = λ·S ÷ c = {formatNumber(m.arrivalRate)}/s × {formatMs(m.serviceAvgMs)} ÷ {tellers} = <strong>{formatNumber(m.rho, 2)}</strong>
+          </dd>
+        </div>
+        <div>
+          <dt>Little: clientes na agência</dt>
+          <dd>
+            L = λ·W = {formatNumber(m.throughput)}/s × {formatMs(m.turnaroundAvgMs)} = <strong>{formatNumber(m.littleL, 2)}</strong>
+          </dd>
+        </div>
+        <div>
+          <dt>Little: clientes na fila</dt>
+          <dd>
+            Lq = λ·Wq = {formatNumber(m.throughput)}/s × {formatMs(m.waitAvgMs)} = <strong>{formatNumber(m.littleLq, 2)}</strong>
+          </dd>
+        </div>
+        {!compact && (
+          <div>
+            <dt>Caixas ocupados em média</dt>
+            <dd>
+              L − Lq = <strong>{formatNumber(m.littleL - m.littleLq, 2)}</strong> de {tellers}
+            </dd>
+          </div>
+        )}
+      </dl>
+      {!compact && (
+        <p className="muted small">
+          Em ρ, λ é a taxa de chegada ({formatNumber(m.arrivalRate)} clientes/s na janela de chegadas) e S o atendimento médio
+          medido. No Teorema de Little, λ é a vazão efetiva da execução inteira e W o tempo médio na agência (turnaround).
+          {run.status !== 'completed' && ' A execução não terminou, então os valores são parciais.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** Resumo das métricas de uma execução. */
 export function MetricsSummary({ run }: { run: RunRecord }) {
   const m = run.metrics
@@ -28,6 +90,7 @@ export function MetricsSummary({ run }: { run: RunRecord }) {
   ]
   return (
     <div className="metrics">
+      <LittlePanel run={run} />
       <dl className="metric-grid">
         {items.map(([label, value, bad]) => (
           <div key={label} className={bad ? 'metric bad' : 'metric'}>

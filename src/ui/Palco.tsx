@@ -21,6 +21,8 @@ interface Props {
   header: ReactNode
   /** barra de controles no rodapé */
   footer: ReactNode
+  /** resumo mostrado sobre o palco quando a execução termina */
+  summary?: ReactNode
 }
 
 interface Point {
@@ -49,7 +51,7 @@ function lerp(a: Point, b: Point, p: number, arc = 0): Point {
  * esperam na fila (e vão perdendo a paciência), andam até o caixa e o dinheiro circula
  * entre os cofres. Tudo é função do instante `tUs`, como no resto da simulação.
  */
-export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, deadlock, header, footer }: Props) {
+export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, deadlock, header, footer, summary }: Props) {
   const floorRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 1200, h: 640 })
   useEffect(() => {
@@ -335,6 +337,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
             <span>{deadlock.reason === 'cycle' ? cycleText(deadlock, config.accounts) : 'Nenhum progresso com caixas esperando lock.'}</span>
           </div>
         )}
+        {summary && <div className="stage-summary">{summary}</div>}
       </div>
 
       <footer className="stage-footer">{footer}</footer>

@@ -33,11 +33,14 @@ const METRIC_OPTIONS: MetricOption[] = [
   { key: 'turnaround', label: 'Turnaround médio', value: (m) => m.turnaroundAvgMs, format: formatMs },
   { key: 'makespan', label: 'Makespan', value: (m) => m.makespanMs, format: formatMs },
   { key: 'throughput', label: 'Throughput (clientes/s)', value: (m) => m.throughput, format: (v) => formatNumber(v) },
+  { key: 'rho', label: 'ρ — carga por caixa (< 1 dá conta)', value: (m) => m.rho ?? 0, format: (v) => formatNumber(v, 2) },
+  { key: 'littleLq', label: 'Lq — clientes na fila (Little)', value: (m) => m.littleLq ?? 0, format: (v) => formatNumber(v, 2) },
+  { key: 'littleL', label: 'L — clientes na agência (Little)', value: (m) => m.littleL ?? 0, format: (v) => formatNumber(v, 2) },
   { key: 'lockWait', label: 'Tempo esperando lock', value: (m) => m.lockWaitTotalMs, format: formatMs },
   { key: 'money', label: 'Dinheiro inconsistente (módulo)', value: (m) => Math.abs(m.inconsistentCents), format: (v) => formatMoney(Math.round(v)) },
 ]
 
-type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'money' | 'wrong'
+type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunRecord): number | string; render(run: RunRecord): React.ReactNode }[] = [
   { key: 'date', label: 'Data', value: (r) => r.createdAt, render: (r) => new Date(r.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) },
@@ -51,6 +54,8 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunR
   { key: 'waitCommon', label: 'Comuns', numeric: true, value: (r) => r.metrics.waitCommonAvgMs, render: (r) => formatMs(r.metrics.waitCommonAvgMs) },
   { key: 'turnaround', label: 'Turnaround', numeric: true, value: (r) => r.metrics.turnaroundAvgMs, render: (r) => formatMs(r.metrics.turnaroundAvgMs) },
   { key: 'throughput', label: 'Clientes/s', numeric: true, value: (r) => r.metrics.throughput, render: (r) => formatNumber(r.metrics.throughput) },
+  { key: 'rho', label: 'ρ', numeric: true, value: (r) => r.metrics.rho ?? 0, render: (r) => (r.metrics.rho === undefined ? '—' : <span title={r.metrics.rho < 1 ? 'os caixas dão conta' : 'chega mais trabalho do que os caixas atendem'}>{formatNumber(r.metrics.rho, 2)} {r.metrics.rho < 1 ? '✓' : '⚠'}</span>) },
+  { key: 'littleLq', label: 'Lq (Little)', numeric: true, value: (r) => r.metrics.littleLq ?? 0, render: (r) => (r.metrics.littleLq === undefined ? '—' : formatNumber(r.metrics.littleLq, 2)) },
   { key: 'lockWait', label: 'Esp. lock', numeric: true, value: (r) => r.metrics.lockWaitTotalMs, render: (r) => formatMs(r.metrics.lockWaitTotalMs) },
   { key: 'money', label: 'Inconsistente', numeric: true, value: (r) => Math.abs(r.metrics.inconsistentCents), render: (r) => <span className={r.metrics.inconsistentCents !== 0 ? 'bad' : ''}>{formatMoney(r.metrics.inconsistentCents)}</span> },
   { key: 'wrong', label: 'Contas erradas', numeric: true, value: (r) => r.metrics.wrongAccounts, render: (r) => <span className={r.metrics.wrongAccounts ? 'bad' : ''}>{r.metrics.wrongAccounts}</span> },

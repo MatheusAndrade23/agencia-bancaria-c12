@@ -352,3 +352,16 @@ th.num, td.num { text-align: right; }
 .stage-footer .speed { margin-left: 0; }
 .stage-footer .playback-controls { flex: 1; min-width: 320px; }
 @media (prefers-reduced-motion: reduce) { .person, .person-face, .starvation-face, .line-wait { animation: none; transition: none; } }
+
+/* teoria das filas */
+.little { border: 1px solid var(--border); border-left: 5px solid var(--good); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+.little-over { border-left-color: var(--warning); }
+.little-verdict { display: flex; align-items: center; gap: 10px; }
+.little-verdict > div { display: flex; flex-direction: column; }
+.little-verdict strong { font-size: 15px; }
+.little-icon { font-size: 24px; line-height: 1; }
+.little-formulas { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px 16px; margin: 0; }
+.little-formulas dt { font-size: 11.5px; color: var(--text-muted); }
+.little-formulas dd { margin: 0; font-variant-numeric: tabular-nums; font-size: 13px; }
+.stage-floor > .stage-summary { left: 50%; top: auto; bottom: 18px; translate: -50% 0; width: min(900px, 92%); z-index: 6; box-shadow: 0 8px 30px rgb(0 0 0 / 60%); border-radius: 10px; }
+.stage-summary .little { margin: 0; }

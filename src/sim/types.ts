@@ -163,6 +163,17 @@ export interface Metrics {
   /** real − esperado, em centavos */
   inconsistentCents: number
   wrongAccounts: number
+  // --- teoria das filas (ausentes em execuções salvas por versões antigas) ---
+  /** λ: taxa de chegada, em clientes/s, medida na janela de chegadas */
+  arrivalRate?: number
+  /** S: tempo médio de atendimento medido, em ms */
+  serviceAvgMs?: number
+  /** ρ = λ·S / c: carga oferecida por caixa. Abaixo de 1, os caixas dão conta das chegadas. */
+  rho?: number
+  /** L = λ·W: número médio de clientes na agência (Teorema de Little) */
+  littleL?: number
+  /** Lq = λ·Wq: número médio de clientes na fila (Teorema de Little) */
+  littleLq?: number
 }
 
 export interface RunRecord {
