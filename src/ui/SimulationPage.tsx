@@ -33,6 +33,9 @@ interface Frame {
 }
 
 const SPEEDS: { label: string; value: number }[] = [
+  { label: '0,005×', value: 0.005 },
+  { label: '0,01×', value: 0.01 },
+  { label: '0,02×', value: 0.02 },
   { label: '0,05×', value: 0.05 },
   { label: '0,1×', value: 0.1 },
   { label: '0,25×', value: 0.25 },
