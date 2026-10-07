@@ -4,10 +4,10 @@ import type { RunRecord, SavedScenario, ScenarioConfig } from './sim/types'
 import * as storage from './storage/storage'
 import { Comparacoes } from './ui/Comparacoes'
 import { ConfigPanel } from './ui/ConfigPanel'
+import { QueuePage } from './ui/QueuePage'
 import { SimulationPage } from './ui/SimulationPage'
-import { useTheme } from './ui/theme'
 
-type Tab = 'sim' | 'compare'
+type Tab = 'scenario' | 'sim' | 'compare'
 
 /** Nome do cenário: o salvo pelo usuário, o do preset ou "Personalizado". */
 function resolveScenarioName(config: ScenarioConfig, scenarios: SavedScenario[]): string {
@@ -20,8 +20,7 @@ function resolveScenarioName(config: ScenarioConfig, scenarios: SavedScenario[])
 }
 
 export function App() {
-  const [theme, toggleTheme] = useTheme()
-  const [tab, setTab] = useState<Tab>('sim')
+  const [tab, setTab] = useState<Tab>('scenario')
   const [rawConfig, setRawConfig] = useState<ScenarioConfig>(DEFAULT_CONFIG)
   const [runs, setRuns] = useState<RunRecord[]>(storage.loadRuns)
   const [scenarios, setScenarios] = useState<SavedScenario[]>(storage.loadScenarios)
@@ -37,7 +36,7 @@ export function App() {
     try {
       setRuns(storage.saveRun(record))
     } catch {
-      setNotice('Não foi possível salvar a execução: o armazenamento do navegador está cheio. Exporte e limpe as execuções antigas.')
+      setNotice('Não foi possível salvar a execução: o armazenamento do navegador está cheio. Exclua execuções antigas em Comparações.')
     }
   }, [])
 
@@ -46,26 +45,6 @@ export function App() {
     const used = scenarios.map((s) => Number(/^Cenário (\d+)$/.exec(s.name)?.[1] ?? 0))
     const name = `Cenário ${Math.max(0, ...used) + 1}`
     setScenarios(storage.saveScenario({ id: scenarioId(config), name, config, savedAt: new Date().toISOString() }))
-  }
-
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(storage.exportAll(), null, 2)], { type: 'application/json' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `agencia-bancaria-${new Date().toISOString().slice(0, 10)}.json`
-    link.click()
-    URL.revokeObjectURL(link.href)
-  }
-
-  async function importJson(file: File) {
-    try {
-      const added = storage.importAll(await file.text())
-      setRuns(storage.loadRuns())
-      setScenarios(storage.loadScenarios())
-      setNotice(`Importado: ${added.runs} execuções e ${added.scenarios} cenários novos.`)
-    } catch (e) {
-      setNotice(`Falha ao importar: ${e instanceof Error ? e.message : String(e)}`)
-    }
   }
 
   function clearAll() {
@@ -86,16 +65,16 @@ export function App() {
           </div>
         </div>
         <nav className="tabs" aria-label="Telas">
+          <button type="button" className={tab === 'scenario' ? 'tab tab-active' : 'tab'} onClick={() => setTab('scenario')}>
+            1. Cenário e fila
+          </button>
           <button type="button" className={tab === 'sim' ? 'tab tab-active' : 'tab'} onClick={() => setTab('sim')}>
-            Simulação
+            2. Simulação
           </button>
           <button type="button" className={tab === 'compare' ? 'tab tab-active' : 'tab'} onClick={() => setTab('compare')}>
-            Comparações <span className="count">{runs.length}</span>
+            3. Comparações <span className="count">{runs.length}</span>
           </button>
         </nav>
-        <button type="button" className="btn btn-small" onClick={toggleTheme} aria-label="Alternar tema claro/escuro">
-          {theme === 'dark' ? '☀ Claro' : '🌙 Escuro'}
-        </button>
       </header>
 
       {!isolated && (
@@ -116,35 +95,38 @@ export function App() {
         </div>
       )}
 
+      {tab === 'scenario' && (
+        <main className="layout">
+          <ConfigPanel
+            config={rawConfig}
+            scenarioName={scenarioName}
+            scenarios={scenarios}
+            disabled={running}
+            onChange={setRawConfig}
+            onSaveScenario={saveScenario}
+            onDeleteScenario={(name) => setScenarios(storage.deleteScenario(name))}
+          />
+          <QueuePage config={config} clients={clients} scenarioName={scenarioName} onGoToSimulation={() => setTab('sim')} />
+        </main>
+      )}
       {/* a simulação continua montada ao trocar de aba, para não perder a execução em andamento */}
-      <main className="layout" hidden={tab !== 'sim'}>
-        <ConfigPanel
-          config={rawConfig}
-          clients={clients}
-          scenarioName={scenarioName}
-          scenarios={scenarios}
-          disabled={running}
-          onChange={setRawConfig}
-          onSaveScenario={saveScenario}
-          onDeleteScenario={(name) => setScenarios(storage.deleteScenario(name))}
-        />
+      <main hidden={tab !== 'sim'}>
         <SimulationPage
           config={config}
+          clients={clients}
           scenarioName={scenarioName}
-          theme={theme}
           isolated={isolated}
           onRunFinished={onRunFinished}
           onRunningChange={setRunning}
+          onEditScenario={() => setTab('scenario')}
         />
       </main>
       {tab === 'compare' && (
         <main>
           <Comparacoes
             runs={runs}
-            theme={theme}
+           
             onDelete={(id) => setRuns(storage.deleteRun(id))}
-            onExport={exportJson}
-            onImport={importJson}
             onClearAll={clearAll}
           />
         </main>

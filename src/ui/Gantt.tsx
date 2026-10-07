@@ -3,7 +3,7 @@ import {
   OPS, accountName, formatMoney, lockName,
   type Client, type DeadlockInfo, type ScenarioConfig, type Timeline,
 } from '../sim/types'
-import { PALETTES, clientColor, formatMs, type ThemeName } from './theme'
+import { PALETTE, clientColor, formatMs } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -12,7 +12,6 @@ interface Props {
   /** desenha só o que aconteceu até este instante */
   tUs: number
   deadlock?: DeadlockInfo
-  theme: ThemeName
   rowHeight?: number
 }
 
@@ -52,7 +51,7 @@ function hatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
 }
 
 /** Diagrama de Gantt: uma linha por caixa, um bloco por cliente, hachura = esperando lock. */
-export function Gantt({ config, clients, timeline, tUs, deadlock, theme, rowHeight = 30 }: Props) {
+export function Gantt({ config, clients, timeline, tUs, deadlock, rowHeight = 30 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const blocksRef = useRef<Block[]>([])
@@ -72,7 +71,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, theme, rowHeig
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
-    const palette = PALETTES[theme]
+    const palette = PALETTE
     const dpr = window.devicePixelRatio || 1
     canvas.width = Math.round(width * dpr)
     canvas.height = Math.round(height * dpr)
@@ -117,7 +116,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, theme, rowHeig
       const w = Math.max(1.5, xOf(end) - x - 1) // 1px de respiro entre blocos vizinhos
       const y = AXIS_HEIGHT + trace.teller * rowHeight + 3
       const h = rowHeight - 6
-      ctx.fillStyle = clientColor(i, theme)
+      ctx.fillStyle = clientColor(i)
       ctx.beginPath()
       ctx.roundRect(x, y, w, h, 3)
       ctx.fill()
@@ -174,7 +173,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, theme, rowHeig
       ctx.stroke()
       ctx.setLineDash([])
     }
-  }, [config, clients, timeline, tUs, deadlock, theme, width, height, rowHeight])
+  }, [config, clients, timeline, tUs, deadlock, width, height, rowHeight])
 
   function onMove(event: React.MouseEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect()

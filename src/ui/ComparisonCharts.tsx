@@ -6,7 +6,7 @@ import {
   ALGORITHMS, ALGORITHM_LABEL, LOCK_MODES, LOCK_MODE_LABEL, formatMoney,
   type Metrics, type RunRecord,
 } from '../sim/types'
-import { PALETTES, formatMs, type Palette, type ThemeName } from './theme'
+import { PALETTE, formatMs } from './theme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -57,11 +57,11 @@ interface ChartCardProps {
   subtitle: string
   labels: string[]
   series: Series[]
-  palette: Palette
   format(value: number): string
 }
 
-function ChartCard({ title, subtitle, labels, series, palette, format }: ChartCardProps) {
+function ChartCard({ title, subtitle, labels, series, format }: ChartCardProps) {
+  const palette = PALETTE
   const hasData = series.some((s) => s.stats.some((stat) => stat.n > 0))
   const data = {
     // quebra o rótulo em duas linhas para o texto do eixo não girar
@@ -147,8 +147,7 @@ function ChartCard({ title, subtitle, labels, series, palette, format }: ChartCa
 }
 
 /** Gráficos de barras do cenário selecionado. Só execuções concluídas entram nas médias. */
-export function ComparisonCharts({ runs, theme }: { runs: RunRecord[]; theme: ThemeName }) {
-  const palette = PALETTES[theme]
+export function ComparisonCharts({ runs }: { runs: RunRecord[] }) {
   const completed = useMemo(() => runs.filter((run) => run.status === 'completed'), [runs])
   const byAlgorithm = (value: (m: Metrics) => number) =>
     ALGORITHMS.map((alg) => meanAndSd(completed.filter((run) => run.algorithm === alg).map((run) => value(run.metrics))))
@@ -172,7 +171,6 @@ export function ComparisonCharts({ runs, theme }: { runs: RunRecord[]; theme: Th
           subtitle="tempo na fila até ser chamado"
           labels={algorithmLabels}
           series={[{ label: 'Espera média', stats: byAlgorithm((m) => m.waitAvgMs) }]}
-          palette={palette}
           format={formatMs}
         />
         <ChartCard
@@ -183,7 +181,6 @@ export function ComparisonCharts({ runs, theme }: { runs: RunRecord[]; theme: Th
             { label: 'Preferenciais', stats: byAlgorithm((m) => m.waitPrefAvgMs) },
             { label: 'Comuns', stats: byAlgorithm((m) => m.waitCommonAvgMs) },
           ]}
-          palette={palette}
           format={formatMs}
         />
         <ChartCard
@@ -191,7 +188,6 @@ export function ComparisonCharts({ runs, theme }: { runs: RunRecord[]; theme: Th
           subtitle="tempo total para atender a fila inteira"
           labels={lockLabels}
           series={[{ label: 'Makespan', stats: byLock((m) => m.makespanMs) }]}
-          palette={palette}
           format={formatMs}
         />
         <ChartCard
@@ -199,7 +195,6 @@ export function ComparisonCharts({ runs, theme }: { runs: RunRecord[]; theme: Th
           subtitle="módulo da diferença na invariante"
           labels={lockLabels}
           series={[{ label: 'Dinheiro inconsistente', stats: byLock((m) => Math.abs(m.inconsistentCents)) }]}
-          palette={palette}
           format={money}
         />
       </div>

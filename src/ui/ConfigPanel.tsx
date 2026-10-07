@@ -1,14 +1,9 @@
 import { useMemo } from 'react'
 import { LIMITS, PRESETS, scenarioId } from '../sim/queue'
-import {
-  OPS, accountName, formatMoney,
-  type Client, type OpMix, type SavedScenario, type ScenarioConfig,
-} from '../sim/types'
-import { formatMs } from './theme'
+import { OPS, type OpMix, type SavedScenario, type ScenarioConfig } from '../sim/types'
 
 interface Props {
   config: ScenarioConfig
-  clients: Client[]
   scenarioName: string
   scenarios: SavedScenario[]
   disabled: boolean
@@ -48,26 +43,25 @@ function Field({ label, value, min, max, step = 1, suffix, disabled, onChange }:
   )
 }
 
-/** Configuração do cenário, presets, cenários salvos e a fila gerada. */
+/** Configuração do cenário, presets e cenários salvos. */
 export function ConfigPanel(props: Props) {
-  const { config, clients, scenarioName, scenarios, disabled, onChange } = props
+  const { config, scenarioName, scenarios, disabled, onChange } = props
   const set = (patch: Partial<ScenarioConfig>) => onChange({ ...config, ...patch })
   const setMix = (key: keyof OpMix, value: number) => onChange({ ...config, mix: { ...config.mix, [key]: value } })
   const mixTotal = OPS.reduce((sum, op) => sum + config.mix[op.key], 0)
   const id = useMemo(() => scenarioId(config), [config])
-  const counts = useMemo(() => OPS.map((_, op) => clients.filter((c) => c.op === op).length), [clients])
-  const preferential = clients.filter((c) => c.priority === 1).length
 
   return (
     <aside className="config">
       <section className="panel">
         <header className="panel-header">
-          <h2>Cenário</h2>
+          <h2>Configuração</h2>
           <span className="muted small" title="Hash da configuração">
             {scenarioName} · <code>{id}</code>
           </span>
         </header>
 
+        {disabled && <p className="banner small">Há uma simulação em andamento: o cenário fica travado até ela terminar.</p>}
         <div className="preset-row">
           {PRESETS.map((preset) => (
             <button
@@ -170,52 +164,6 @@ export function ConfigPanel(props: Props) {
         )}
       </section>
 
-      <section className="panel">
-        <details>
-          <summary>
-            <h2>Fila gerada</h2>
-            <span className="muted small">
-              {clients.length} clientes · {preferential} preferenciais
-            </span>
-          </summary>
-          <p className="muted small">
-            {OPS.map((op, i) => `${counts[i]} ${op.label.toLowerCase()}`).join(' · ')}. A mesma seed gera sempre esta mesma fila.
-          </p>
-          <div className="table-scroll queue-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Chegada</th>
-                  <th>Prior.</th>
-                  <th>Operação</th>
-                  <th>Contas</th>
-                  <th>Valor</th>
-                  <th>Duração</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clients.map((client) => (
-                  <tr key={client.id}>
-                    <td>{client.id}</td>
-                    <td>{formatMs(client.arrivalUs / 1000)}</td>
-                    <td>{client.priority === 1 ? '★ Pref.' : 'Comum'}</td>
-                    <td>
-                      <span className={`dot op-${OPS[client.op].key}`} /> {OPS[client.op].label}
-                    </td>
-                    <td>
-                      {accountName(client.from)}
-                      {client.to >= 0 ? ` → ${accountName(client.to)}` : ''}
-                    </td>
-                    <td className="num">{formatMoney(client.amount)}</td>
-                    <td className="num">{formatMs(client.durationUs / 1000)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      </section>
     </aside>
   )
 }

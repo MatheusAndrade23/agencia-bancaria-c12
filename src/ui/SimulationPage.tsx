@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { startRun, type RunHandle } from '../sim/engine'
+import { scenarioId } from '../sim/queue'
 import { viewAt, type AgencyView } from '../sim/timeline'
 import {
   ALGORITHMS, ALGORITHM_LABEL, LOCK_MODES, LOCK_MODE_LABEL,
-  type Algorithm, type LockMode, type RunRecord, type ScenarioConfig, type Timeline,
+  type Algorithm, type Client, type LockMode, type RunRecord, type ScenarioConfig, type Timeline,
 } from '../sim/types'
 import { Caixas } from './Caixas'
 import { Cofres } from './Cofres'
@@ -11,13 +12,14 @@ import { DeadlockPanel } from './DeadlockPanel'
 import { Fila } from './Fila'
 import { Gantt } from './Gantt'
 import { MetricsSummary, StatusBadge } from './MetricsSummary'
-import { formatMs, type ThemeName } from './theme'
+import { formatMs } from './theme'
 
 interface Props {
   config: ScenarioConfig
   scenarioName: string
-  theme: ThemeName
   isolated: boolean
+  clients: Client[]
+  onEditScenario(): void
   /** chamado quando uma execução termina, para salvá-la */
   onRunFinished(record: RunRecord): void
   onRunningChange(running: boolean): void
@@ -42,7 +44,7 @@ const SPEEDS: { label: string; value: number }[] = [
 /** Duração da animação do dinheiro, em ms de relógio de parede. */
 const MONEY_FX_MS = 700
 
-export function SimulationPage({ config, scenarioName, theme, isolated, onRunFinished, onRunningChange }: Props) {
+export function SimulationPage({ config, scenarioName, clients, isolated, onRunFinished, onRunningChange, onEditScenario }: Props) {
   const [algorithm, setAlgorithm] = useState<Algorithm>('fcfs')
   const [lockMode, setLockMode] = useState<LockMode>('none')
   const [handle, setHandle] = useState<RunHandle | null>(null)
@@ -164,6 +166,23 @@ export function SimulationPage({ config, scenarioName, theme, isolated, onRunFin
 
   return (
     <div className="sim">
+      <section className="panel scenario-strip">
+        <div>
+          <span className="muted small">Cenário</span>
+          <strong>
+            {scenarioName} <code>{scenarioId(config)}</code>
+          </strong>
+        </div>
+        <span className="muted">
+          {config.tellers} caixas · {config.accounts} contas · {clients.length} clientes ({clients.filter((c) => c.priority === 1).length}{' '}
+          preferenciais) · janela crítica {config.criticalWindowMs} ms · seed {config.seed}
+        </span>
+        <span className="spacer" />
+        <button type="button" className="btn btn-small" disabled={running} onClick={onEditScenario}>
+          ✎ Editar cenário e ver a fila
+        </button>
+      </section>
+
       <section className="panel controls">
         <label className="field">
           <span>Escalonamento</span>
@@ -233,7 +252,7 @@ export function SimulationPage({ config, scenarioName, theme, isolated, onRunFin
         <section className="panel empty-state">
           <h2>Pronto para abrir a agência</h2>
           <p className="muted">
-            Ajuste o cenário à esquerda, escolha o algoritmo de escalonamento e o modo de sincronismo e clique em{' '}
+            Escolha o algoritmo de escalonamento e o modo de sincronismo e clique em{' '}
             <strong>Iniciar</strong>. Cada caixa roda em um Web Worker (thread real) e todos compartilham os saldos em um
             SharedArrayBuffer. A execução acontece em tempo real; a tela a reproduz em câmera lenta.
           </p>
@@ -292,7 +311,6 @@ export function SimulationPage({ config, scenarioName, theme, isolated, onRunFin
               timeline={frame.timeline}
               tUs={frame.tUs}
               deadlock={deadlock}
-              theme={theme}
             />
           </section>
 

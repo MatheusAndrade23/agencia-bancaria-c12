@@ -81,6 +81,10 @@ Cada escrita de saldo registra também o quanto a conta *deveria* ter variado. A
 
 A fila é gerada por um PRNG com semente (mulberry32, em `src/sim/rng.ts`). A mesma configuração com a mesma seed gera **exatamente a mesma fila**, e é isso que permite comparar todos os algoritmos sobre o mesmo cenário. Cada cenário tem um hash da configuração, e cada execução salva guarda esse hash.
 
+O app tem três abas, na ordem de uso: **Cenário e fila** (configurar e ver a fila), **Simulação** (rodar) e **Comparações** (analisar os resultados).
+
+A aba **Cenário e fila** mostra a fila gerada antes de rodar, atualizada a cada mudança na configuração: as chegadas ao longo do tempo, a composição por tipo de operação e prioridade, a matriz de transferências entre contas (com os pares cruzados que podem dar deadlock) e a ordem em que cada algoritmo chamaria os clientes.
+
 Presets prontos:
 
 - **Padrão**: mistura equilibrada, 4 caixas e 5 contas.
@@ -175,16 +179,17 @@ Cada execução registra: makespan, espera na fila (média, mínima e máxima), 
 
 ## Roteiro sugerido de demonstração
 
-1. **Conhecer a tela.** Preset *Padrão*, FCFS, lock por cofre ordenado, velocidade 0,1×. Clique em **Iniciar** e acompanhe a fila, os caixas, os cadeados nos cofres e o Gantt. A invariante fica verde até o fim.
-2. **Race condition.** Preset *Corrida*, modo **Sem lock**. O painel da invariante fica vermelho no meio da execução e os cofres mostram "deveria ser R$ ...". Rode de novo: o valor inconsistente muda a cada vez, porque depende de como o sistema operacional intercala as threads.
-3. **Corrigir com lock.** Mesmo cenário com **Lock global** e depois **Por cofre (ordenado)**. Os dois fecham a invariante em zero. Compare o makespan e o tempo esperando lock: o global serializa todo mundo, o por cofre deixa contas diferentes andarem em paralelo.
-4. **Deadlock.** Preset *Deadlock*, modo **Por cofre (sem ordem)**. Em frações de segundo os caixas travam. O app mostra o ciclo e as quatro condições de Coffman podem ser apontadas na tela. Troque para o modo ordenado e o mesmo cenário termina normalmente.
-5. **Starvation e aging.** Preset *Starvation*. Rode com **Prioridade** e depois com **Prioridade + Aging**. No gráfico "preferenciais vs. comuns", a espera dos comuns cai com o aging e a dos preferenciais sobe um pouco. Compare também com FCFS e SJF.
-6. **Visão geral.** Clique em **Rodar as 16 combinações** em cada preset. Na aba **Comparações**, escolha o cenário e analise:
+1. **Conhecer a fila.** Na aba **Cenário e fila**, escolha o preset *Padrão* e mostre as chegadas e compare a ordem prevista de cada algoritmo sobre os mesmos clientes.
+2. **Conhecer a simulação.** Na aba **Simulação**, FCFS, lock por cofre ordenado, velocidade 0,1×. Clique em **Iniciar** e acompanhe a fila, os caixas, os cadeados nos cofres e o Gantt. A invariante fica verde até o fim.
+3. **Race condition.** Preset *Corrida*, modo **Sem lock**. O painel da invariante fica vermelho no meio da execução e os cofres mostram "deveria ser R$ ...". Rode de novo: o valor inconsistente muda a cada vez, porque depende de como o sistema operacional intercala as threads.
+4. **Corrigir com lock.** Mesmo cenário com **Lock global** e depois **Por cofre (ordenado)**. Os dois fecham a invariante em zero. Compare o makespan e o tempo esperando lock: o global serializa todo mundo, o por cofre deixa contas diferentes andarem em paralelo.
+5. **Deadlock.** Preset *Deadlock*, modo **Por cofre (sem ordem)**. Em frações de segundo os caixas travam. O app mostra o ciclo e as quatro condições de Coffman podem ser apontadas na tela. Troque para o modo ordenado e o mesmo cenário termina normalmente.
+6. **Starvation e aging.** Preset *Starvation*. Rode com **Prioridade** e depois com **Prioridade + Aging**. No gráfico "preferenciais vs. comuns", a espera dos comuns cai com o aging e a dos preferenciais sobe um pouco. Compare também com FCFS e SJF.
+7. **Visão geral.** Clique em **Rodar as 16 combinações** em cada preset. Na aba **Comparações**, escolha o cenário e analise:
    - a matriz algoritmo × sincronismo, trocando a métrica (as células de deadlock ficam marcadas);
    - os quatro gráficos de barras;
    - duas a quatro execuções marcadas na tabela, lado a lado, com os Gantts.
-7. **Repetibilidade.** Rode a mesma combinação várias vezes. A fila é idêntica (mesma seed), mas os tempos variam um pouco e a inconsistência do "sem lock" varia muito. A matriz e os gráficos passam a mostrar média e desvio padrão.
+8. **Repetibilidade.** Rode a mesma combinação várias vezes. A fila é idêntica (mesma seed), mas os tempos variam um pouco e a inconsistência do "sem lock" varia muito. A matriz e os gráficos passam a mostrar média e desvio padrão.
 
 ## Organização do código
 
@@ -200,14 +205,15 @@ src/
     watchdog.ts     grafo de espera e detecção de deadlock
     timeline.ts     registro da execução e estado da agência em um instante
     metrics.ts      cálculo das métricas
+    preview.ts      previsão da ordem de atendimento (usada na tela da fila)
     engine.ts       sobe os workers, roda o watchdog e monta o resultado
     *.test.ts       testes unitários
   workers/
     teller.worker.ts  lógica do caixa (roda em uma thread)
   storage/
-    storage.ts      persistência no localStorage, exportar e importar JSON
+    storage.ts      persistência no localStorage
   ui/
-    SimulationPage, ConfigPanel, Fila, Caixas, Cofres, Gantt,
+    SimulationPage, ConfigPanel, QueuePage, Fila, Caixas, Cofres, Gantt,
     DeadlockPanel, MetricsSummary, Comparacoes, ComparisonCharts
 ```
 
@@ -217,4 +223,4 @@ Stack: Vite, TypeScript, React, Chart.js (via react-chartjs-2) e Vitest. Não h�
 
 - Os tempos dependem da máquina e do que mais está rodando nela. Para comparar números, rode todas as combinações na mesma máquina e na mesma sessão.
 - Navegadores reduzem a frequência de timers em abas em segundo plano. Deixe a aba visível durante as execuções, senão a detecção de deadlock e a animação atrasam.
-- O `localStorage` tem cerca de 5 MB. Cada execução ocupa alguns kB; se encher, o app avisa. Use **Exportar JSON** e **Limpar tudo**.
+- O `localStorage` tem cerca de 5 MB. Cada execução ocupa alguns kB; se encher, o app avisa. Exclua execuções antigas na tabela ou use **Limpar tudo**.

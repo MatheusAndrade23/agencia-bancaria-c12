@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { meanAndSd } from '../sim/metrics'
 import { generateQueue } from '../sim/queue'
 import { unpackTimeline } from '../sim/timeline'
@@ -10,14 +10,11 @@ import { ComparisonCharts } from './ComparisonCharts'
 import { cycleText } from './DeadlockPanel'
 import { Gantt } from './Gantt'
 import { MetricsSummary, StatusBadge } from './MetricsSummary'
-import { PALETTES, formatMs, formatNumber, type ThemeName } from './theme'
+import { PALETTE, formatMs, formatNumber, sequentialInk } from './theme'
 
 interface Props {
   runs: RunRecord[]
-  theme: ThemeName
   onDelete(id: string): void
-  onExport(): void
-  onImport(file: File): void
   onClearAll(): void
 }
 
@@ -61,7 +58,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunR
 
 const MAX_SELECTED = 4
 
-export function Comparacoes({ runs, theme, onDelete, onExport, onImport, onClearAll }: Props) {
+export function Comparacoes({ runs, onDelete, onClearAll }: Props) {
   const scenarios = useMemo(() => {
     const byId = new Map<string, { id: string; label: string; last: string }>()
     for (const run of runs) {
@@ -79,7 +76,6 @@ export function Comparacoes({ runs, theme, onDelete, onExport, onImport, onClear
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'date', dir: -1 })
   const [selected, setSelected] = useState<string[]>([])
   const [metricKey, setMetricKey] = useState('waitAvg')
-  const fileInput = useRef<HTMLInputElement>(null)
 
   // "latest" acompanha o cenário da execução mais recente
   const scenarioFilter =
@@ -123,23 +119,6 @@ export function Comparacoes({ runs, theme, onDelete, onExport, onImport, onClear
           <h2>Execuções salvas</h2>
           <span className="muted">{runs.length} no navegador (localStorage)</span>
           <span className="spacer" />
-          <button type="button" className="btn btn-small" onClick={onExport} disabled={runs.length === 0}>
-            ⬇ Exportar JSON
-          </button>
-          <button type="button" className="btn btn-small" onClick={() => fileInput.current?.click()}>
-            ⬆ Importar JSON
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) onImport(file)
-              event.target.value = ''
-            }}
-          />
           <button type="button" className="btn btn-small btn-danger" onClick={onClearAll}>
             🗑 Limpar tudo
           </button>
@@ -255,7 +234,7 @@ export function Comparacoes({ runs, theme, onDelete, onExport, onImport, onClear
         {selectedRuns.length >= 2 && (
           <div className="side-by-side" style={{ gridTemplateColumns: `repeat(${selectedRuns.length}, minmax(280px, 1fr))` }}>
             {selectedRuns.map((run) => (
-              <SideBySideCard key={run.id} run={run} theme={theme} />
+              <SideBySideCard key={run.id} run={run} />
             ))}
           </div>
         )}
@@ -267,15 +246,15 @@ export function Comparacoes({ runs, theme, onDelete, onExport, onImport, onClear
         </section>
       ) : (
         <>
-          <Heatmap runs={scenarioRuns} metricKey={metricKey} onMetricChange={setMetricKey} theme={theme} />
-          <ComparisonCharts runs={scenarioRuns} theme={theme} />
+          <Heatmap runs={scenarioRuns} metricKey={metricKey} onMetricChange={setMetricKey} />
+          <ComparisonCharts runs={scenarioRuns} />
         </>
       )}
     </div>
   )
 }
 
-function SideBySideCard({ run, theme }: { run: RunRecord; theme: ThemeName }) {
+function SideBySideCard({ run }: { run: RunRecord }) {
   const clients = useMemo(() => generateQueue(run.config), [run])
   const timeline = useMemo(() => unpackTimeline(run.timeline), [run])
   return (
@@ -290,7 +269,7 @@ function SideBySideCard({ run, theme }: { run: RunRecord; theme: ThemeName }) {
         {run.scenarioName} · seed {run.config.seed} · {new Date(run.createdAt).toLocaleString('pt-BR')}
       </div>
       {run.deadlock && run.deadlock.cycle.length > 0 && <p className="cycle-text small">{cycleText(run.deadlock, run.config.accounts)}</p>}
-      <Gantt config={run.config} clients={clients} timeline={timeline} tUs={timeline.endUs} deadlock={run.deadlock} theme={theme} rowHeight={24} />
+      <Gantt config={run.config} clients={clients} timeline={timeline} tUs={timeline.endUs} deadlock={run.deadlock} rowHeight={24} />
       <MetricsSummary run={run} />
     </article>
   )
@@ -299,14 +278,12 @@ function SideBySideCard({ run, theme }: { run: RunRecord; theme: ThemeName }) {
 interface HeatmapProps {
   runs: RunRecord[]
   metricKey: string
-  theme: ThemeName
   onMetricChange(key: string): void
 }
 
 /** Matriz algoritmo × modo de lock. Só execuções concluídas entram na média. */
-function Heatmap({ runs, metricKey, theme, onMetricChange }: HeatmapProps) {
+function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
   const metric = METRIC_OPTIONS.find((option) => option.key === metricKey) ?? METRIC_OPTIONS[0]
-  const palette = PALETTES[theme]
 
   const cells = ALGORITHMS.map((algorithm) =>
     LOCK_MODES.map((lockMode) => {
@@ -324,13 +301,9 @@ function Heatmap({ runs, metricKey, theme, onMetricChange }: HeatmapProps) {
   const means = cells.flat().filter((cell) => cell.stats.n > 0).map((cell) => cell.stats.mean)
   const min = Math.min(...means)
   const max = Math.max(...means)
-  const ramp = palette.sequential
-  // no tema claro o valor alto é o tom escuro; no escuro, o tom claro (sempre o que mais se destaca da superfície)
+  const ramp = PALETTE.sequential
+  // valores altos usam o tom que mais se destaca da superfície
   const stepOf = (value: number) => (max > min ? Math.min(ramp.length - 1, Math.floor(((value - min) / (max - min)) * ramp.length)) : 0)
-  const inkOf = (step: number) => {
-    const darkStep = theme === 'light' ? step >= 4 : step <= 2
-    return darkStep ? '#ffffff' : '#0b0b0b'
-  }
 
   return (
     <section className="panel">
@@ -390,7 +363,7 @@ function Heatmap({ runs, metricKey, theme, onMetricChange }: HeatmapProps) {
                   return (
                     <td
                       key={cell.lockMode}
-                      style={{ background: ramp[step], color: inkOf(step) }}
+                      style={{ background: ramp[step], color: sequentialInk(step) }}
                       title={`${ALGORITHM_LABEL[cell.algorithm]} × ${LOCK_MODE_LABEL[cell.lockMode]}: ${metric.format(cell.stats.mean)} (n=${cell.stats.n})`}
                     >
                       <strong>{metric.format(cell.stats.mean)}</strong>
