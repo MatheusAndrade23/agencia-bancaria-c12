@@ -6,7 +6,7 @@ import {
   ALGORITHMS, ALGORITHM_LABEL, LOCK_MODES, LOCK_MODE_LABEL, formatMoney,
   type Metrics, type RunRecord,
 } from '../sim/types'
-import { PALETTE, formatMs } from './theme'
+import { formatMs, usePalette } from './theme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -61,7 +61,7 @@ interface ChartCardProps {
 }
 
 function ChartCard({ title, subtitle, labels, series, format }: ChartCardProps) {
-  const palette = PALETTE
+  const palette = usePalette()
   const hasData = series.some((s) => s.stats.some((stat) => stat.n > 0))
   const data = {
     // quebra o rótulo em duas linhas para o texto do eixo não girar

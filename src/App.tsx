@@ -6,7 +6,9 @@ import { Comparacoes } from './ui/Comparacoes'
 import { ConfigPanel } from './ui/ConfigPanel'
 import { QueuePage } from './ui/QueuePage'
 import { SimulationPage } from './ui/SimulationPage'
-import { LogoMark } from './ui/icons'
+import { Icon, LogoMark } from './ui/icons'
+import { PALETTES, PaletteContext } from './ui/theme'
+import { useTheme } from './ui/useTheme'
 
 type Tab = 'scenario' | 'sim' | 'compare'
 
@@ -27,6 +29,7 @@ export function App() {
   const [scenarios, setScenarios] = useState<SavedScenario[]>(storage.loadScenarios)
   const [running, setRunning] = useState(false)
   const [notice, setNotice] = useState('')
+  const { theme, toggle: toggleTheme } = useTheme()
 
   const config = useMemo(() => sanitizeConfig(rawConfig), [rawConfig])
   const clients = useMemo(() => generateQueue(config), [config])
@@ -55,7 +58,10 @@ export function App() {
     setScenarios([])
   }
 
+  const themeLabel = theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'
+
   return (
+    <PaletteContext.Provider value={PALETTES[theme]}>
     <div className="app">
       <div className="topbar-wrap">
       <header className="topbar">
@@ -77,6 +83,9 @@ export function App() {
             3. Comparações <span className="count">{runs.length}</span>
           </button>
         </nav>
+        <button type="button" className="theme-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
+        </button>
       </header>
       </div>
 
@@ -128,12 +137,12 @@ export function App() {
         <main>
           <Comparacoes
             runs={runs}
-           
             onDelete={(id) => setRuns(storage.deleteRun(id))}
             onClearAll={clearAll}
           />
         </main>
       )}
     </div>
+    </PaletteContext.Provider>
   )
 }

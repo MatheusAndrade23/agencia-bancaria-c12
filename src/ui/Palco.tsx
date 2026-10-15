@@ -6,7 +6,7 @@ import {
 } from '../sim/types'
 import { cycleText } from './DeadlockPanel'
 import { Face, Icon, Person, Teller, type Mood } from './icons'
-import { PALETTE, formatMs } from './theme'
+import { formatMs, usePalette } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -53,6 +53,7 @@ function lerp(a: Point, b: Point, p: number, arc = 0): Point {
  * entre os cofres. Tudo é função do instante `tUs`, como no resto da simulação.
  */
 export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, deadlock, header, footer, summary }: Props) {
+  const palette = usePalette()
   const floorRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 1200, h: 640 })
   useEffect(() => {
@@ -150,7 +151,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
         title={`Cliente #${client.id} · ${op.label} · ${formatMoney(client.amount)}`}
       >
         <span className="person-face">
-          <Person mood={face} color={PALETTE.ops[client.op]} preferential={client.priority === 1} size={54} />
+          <Person mood={face} color={palette.ops[client.op]} preferential={client.priority === 1} size={54} />
         </span>
         <span className="person-tag">#{client.id}</span>
         {ratio >= 0 && (
@@ -341,9 +342,9 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
         </div>
         <div className="stage-door" style={{ transform: `translate(${door.x}px, ${door.y}px)` }} aria-hidden>
           <svg viewBox="0 0 40 56" width={40} height={56}>
-            <rect x="2" y="2" width="36" height="52" rx="2" fill="#ffffff" stroke="#ec0000" strokeWidth="3" />
-            <rect x="8" y="8" width="24" height="18" fill="#fdecec" />
-            <circle cx="30" cy="32" r="2" fill="#ec0000" />
+            <rect x="2" y="2" width="36" height="52" rx="2" strokeWidth="3" style={{ fill: 'var(--surface)', stroke: 'var(--brand)' }} />
+            <rect x="8" y="8" width="24" height="18" style={{ fill: 'var(--brand-soft)' }} />
+            <circle cx="30" cy="32" r="2" style={{ fill: 'var(--brand)' }} />
           </svg>
           <span className="small muted">entrada</span>
         </div>

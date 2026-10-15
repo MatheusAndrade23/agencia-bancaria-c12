@@ -11,7 +11,7 @@ import { ComparisonCharts } from './ComparisonCharts'
 import { cycleText } from './DeadlockPanel'
 import { Gantt } from './Gantt'
 import { MetricsSummary, StatusBadge } from './MetricsSummary'
-import { PALETTE, formatMs, formatNumber, sequentialInk } from './theme'
+import { formatMs, formatNumber, usePalette } from './theme'
 
 interface Props {
   runs: RunRecord[]
@@ -307,7 +307,8 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
   const means = cells.flat().filter((cell) => cell.stats.n > 0).map((cell) => cell.stats.mean)
   const min = Math.min(...means)
   const max = Math.max(...means)
-  const ramp = PALETTE.sequential
+  const palette = usePalette()
+  const ramp = palette.sequential
   // valores altos usam o tom que mais se destaca da superfície
   const stepOf = (value: number) => (max > min ? Math.min(ramp.length - 1, Math.floor(((value - min) / (max - min)) * ramp.length)) : 0)
 
@@ -369,7 +370,7 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
                   return (
                     <td
                       key={cell.lockMode}
-                      style={{ background: ramp[step], color: sequentialInk(step) }}
+                      style={{ background: ramp[step], color: palette.sequentialInk[step] }}
                       title={`${ALGORITHM_LABEL[cell.algorithm]} × ${LOCK_MODE_LABEL[cell.lockMode]}: ${metric.format(cell.stats.mean)} (n=${cell.stats.n})`}
                     >
                       <strong>{metric.format(cell.stats.mean)}</strong>

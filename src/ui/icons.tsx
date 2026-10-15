@@ -8,6 +8,7 @@ export type IconName =
   | 'lock' | 'unlock' | 'hourglass' | 'skull' | 'star' | 'check' | 'x' | 'alert'
   | 'play' | 'stop' | 'pause' | 'forward' | 'replay' | 'skip' | 'fullscreen' | 'edit' | 'trash'
   | 'arrow-right' | 'clock' | 'users' | 'vault' | 'banknote' | 'chevron-up' | 'chevron-down' | 'gauge'
+  | 'sun' | 'moon'
 
 const PATHS: Record<IconName, ReactNode> = {
   // operações
@@ -111,6 +112,14 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M19 5v14" />
     </>
   ),
+  // tema
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+    </>
+  ),
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />,
   fullscreen: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />,
   edit: (
     <>
@@ -289,7 +298,7 @@ function FaceShape({ mood }: { mood: Mood }) {
     case 'sleep':
       eyes = <path d="M-5-2q1.5 1.5 3 0M2-2q1.5 1.5 3 0" />
       mouth = <path d="M-2 5h4" />
-      extra = <text x={7} y={-7} fontSize={6} fontWeight={700} fill="#767676" stroke="none">z</text>
+      extra = <text x={7} y={-7} fontSize={6} fontWeight={700} stroke="none" style={{ fill: 'var(--text-muted)' }}>z</text>
       break
   }
   return (
@@ -315,7 +324,7 @@ export function Face({ mood, size = 28, className }: { mood: Mood; size?: number
 export function Person({ mood, color, preferential, size = 44 }: { mood: Mood; color: string; preferential?: boolean; size?: number }) {
   return (
     <svg viewBox="-16 -15 32 44" width={(size * 32) / 44} height={size} aria-hidden className="person-svg">
-      <path d="M-11 28v-6a11 11 0 0 1 22 0v6z" fill={color} stroke="#ffffff" strokeWidth={1.2} />
+      <path d="M-11 28v-6a11 11 0 0 1 22 0v6z" strokeWidth={1.2} style={{ fill: color, stroke: 'var(--surface)' }} />
       <g transform="translate(0 0)">
         <FaceShape mood={mood} />
       </g>

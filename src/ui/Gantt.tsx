@@ -3,7 +3,7 @@ import {
   OPS, accountName, formatMoney, lockName,
   type Client, type DeadlockInfo, type ScenarioConfig, type Timeline,
 } from '../sim/types'
-import { PALETTE, clientColor, formatMs } from './theme'
+import { clientColor, formatMs, usePalette } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -55,6 +55,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, rowHeight = 30
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const blocksRef = useRef<Block[]>([])
+  const palette = usePalette()
   const [width, setWidth] = useState(600)
   const [hover, setHover] = useState<{ client: number; x: number; y: number } | null>(null)
   const height = AXIS_HEIGHT + config.tellers * rowHeight + 4
@@ -71,7 +72,6 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, rowHeight = 30
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!canvas || !ctx) return
-    const palette = PALETTE
     const dpr = window.devicePixelRatio || 1
     canvas.width = Math.round(width * dpr)
     canvas.height = Math.round(height * dpr)
@@ -143,7 +143,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, rowHeight = 30
         ctx.strokeRect(x + 1, y + 1, w - 2, h - 2)
       }
       if (w > 26) {
-        ctx.fillStyle = '#0b0b0b'
+        ctx.fillStyle = palette.blockInk
         ctx.font = '600 10.5px system-ui, sans-serif'
         ctx.textAlign = 'left'
         ctx.fillText(`#${clients[i]?.id ?? i}`, x + 4, y + h / 2 + 0.5)
@@ -173,7 +173,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, rowHeight = 30
       ctx.stroke()
       ctx.setLineDash([])
     }
-  }, [config, clients, timeline, tUs, deadlock, width, height, rowHeight])
+  }, [config, clients, timeline, tUs, deadlock, width, height, rowHeight, palette])
 
   function onMove(event: React.MouseEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect()

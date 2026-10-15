@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { scenarioId } from '../sim/queue'
 import { OPS, accountName, formatMoney, type Client, type ScenarioConfig } from '../sim/types'
 import { Icon, OpIcon, Person } from './icons'
-import { PALETTE, formatMs, formatNumber } from './theme'
+import { formatMs, formatNumber, usePalette } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -39,6 +39,7 @@ function useWidth<T extends HTMLElement>(fallback: number) {
 
 /** Cada cliente aparece no instante em que chega, como gente andando na calçada até a agência. */
 function ArrivalStreet({ clients }: { clients: Client[] }) {
+  const palette = usePalette()
   const [ref, width] = useWidth<HTMLDivElement>(900)
   const spanUs = Math.max(1, clients[clients.length - 1]?.arrivalUs ?? 1)
   const { placed, lanes } = useMemo(() => {
@@ -59,7 +60,7 @@ function ArrivalStreet({ clients }: { clients: Client[] }) {
       <div className="street-crowd" style={{ height: lanes * LANE_HEIGHT + 6 }}>
         {placed.map(({ client, x, lane }) => (
           <div key={client.id} className="street-person" style={{ left: x, bottom: lane * LANE_HEIGHT + 4 }} title={clientTitle(client)}>
-            <Person mood="happy" color={PALETTE.ops[client.op]} preferential={client.priority === 1} size={34} />
+            <Person mood="happy" color={palette.ops[client.op]} preferential={client.priority === 1} size={34} />
             <span>{client.id}</span>
           </div>
         ))}
@@ -224,7 +225,7 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
           </header>
           <div className="priority-split">
             <div className="priority-side">
-              <Person mood="happy" color="#ec0000" preferential size={56} />
+              <Person mood="happy" color="var(--brand)" preferential size={56} />
               <strong>{stats.preferential}</strong>
               <span className="muted small">preferenciais</span>
             </div>
@@ -233,7 +234,7 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
               <span className="priority-common" style={{ flexGrow: Math.max(common, 0.001) }} />
             </div>
             <div className="priority-side">
-              <Person mood="happy" color="#8a8a8a" size={56} />
+              <Person mood="happy" color="var(--neutral-fill)" size={56} />
               <strong>{common}</strong>
               <span className="muted small">comuns</span>
             </div>
