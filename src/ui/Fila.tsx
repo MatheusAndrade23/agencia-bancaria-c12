@@ -1,3 +1,4 @@
+import { Icon, OpIcon, PrefStar } from './icons'
 import type { AgencyView } from '../sim/timeline'
 import { OPS, accountName, formatMoney, type Client } from '../sim/types'
 import { formatMs } from './theme'
@@ -13,8 +14,8 @@ export function ClientChip({ client, compact }: { client: Client; compact?: bool
   const op = OPS[client.op]
   return (
     <span className={`chip op-${op.key}`}>
-      <span aria-hidden>{op.icon}</span> #{client.id} {compact ? op.short : op.label}
-      {client.priority === 1 && <span className="badge-pref" title="Preferencial">★</span>}
+      <OpIcon op={op.key} size={18} /> #{client.id} {compact ? op.short : op.label}
+      {client.priority === 1 && <PrefStar />}
     </span>
   )
 }
@@ -40,16 +41,16 @@ export function Fila({ clients, view }: Props) {
             <div key={client.id} className={`queue-card op-${op.key}`}>
               <div className="queue-card-top">
                 <span className="queue-id">#{client.id}</span>
-                {client.priority === 1 && <span className="badge-pref-full">★ Pref.</span>}
+                {client.priority === 1 && <span className="badge-pref-full"><PrefStar size={11} /> Pref.</span>}
               </div>
               <div className="queue-op">
-                <span aria-hidden>{op.icon}</span> {op.label}
+                <OpIcon op={op.key} size={18} /> {op.label}
               </div>
               <div className="muted small">
                 {formatMoney(client.amount)} · {accountName(client.from)}
                 {client.to >= 0 ? ` → ${accountName(client.to)}` : ''}
               </div>
-              <div className="queue-wait">⏱ {formatMs(item.waitUs / 1000)}</div>
+              <div className="queue-wait"><Icon name="clock" size={12} /> {formatMs(item.waitUs / 1000)}</div>
             </div>
           )
         })}

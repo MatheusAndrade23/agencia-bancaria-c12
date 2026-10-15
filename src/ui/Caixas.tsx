@@ -1,3 +1,4 @@
+import { Icon, OpIcon, PrefStar, type IconName } from './icons'
 import type { AgencyView, TellerViewState } from '../sim/timeline'
 import { OPS, accountName, formatMoney, lockName, type Client, type ScenarioConfig } from '../sim/types'
 
@@ -8,12 +9,12 @@ const STATE_LABEL: Record<TellerViewState, string> = {
   deadlock: 'DEADLOCK',
   finished: 'Encerrado',
 }
-const STATE_ICON: Record<TellerViewState, string> = {
-  idle: '○',
-  serving: '●',
-  waiting: '⏳',
-  deadlock: '☠',
-  finished: '✓',
+const STATE_ICON: Record<TellerViewState, IconName> = {
+  idle: 'clock',
+  serving: 'check',
+  waiting: 'hourglass',
+  deadlock: 'skull',
+  finished: 'check',
 }
 
 interface Props {
@@ -39,14 +40,14 @@ export function Caixas({ config, clients, view }: Props) {
               <div className="teller-head">
                 <strong>Caixa {t + 1}</strong>
                 <span className="teller-state">
-                  <span aria-hidden>{STATE_ICON[teller.state]}</span> {STATE_LABEL[teller.state]}
+                  <Icon name={STATE_ICON[teller.state]} size={13} /> {STATE_LABEL[teller.state]}
                 </span>
               </div>
               {client && op ? (
                 <div className="teller-body">
                   <div className={`teller-client op-${op.key}`}>
-                    <span aria-hidden>{op.icon}</span> #{client.id} · {op.label}
-                    {client.priority === 1 && <span className="badge-pref">★</span>}
+                    <OpIcon op={op.key} size={20} /> #{client.id} · {op.label}
+                    {client.priority === 1 && <PrefStar />}
                   </div>
                   <div className="muted small">
                     {formatMoney(client.amount)} · {accountName(client.from)}
@@ -58,11 +59,11 @@ export function Caixas({ config, clients, view }: Props) {
                   <div className="teller-locks small">
                     {teller.holding.map((lock) => (
                       <span key={`h${lock}`} className="lock-tag">
-                        🔒 {lockName(lock, config.accounts)}
+                        <Icon name="lock" size={12} /> {lockName(lock, config.accounts)}
                       </span>
                     ))}
                     {teller.waitingFor >= 0 && (
-                      <span className="lock-tag lock-tag-wait">⏳ quer {lockName(teller.waitingFor, config.accounts)}</span>
+                      <span className="lock-tag lock-tag-wait"><Icon name="hourglass" size={12} /> quer {lockName(teller.waitingFor, config.accounts)}</span>
                     )}
                   </div>
                 </div>

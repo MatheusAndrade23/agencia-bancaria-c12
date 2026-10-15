@@ -5,7 +5,8 @@ import {
   type Client, type DeadlockInfo, type LockMode, type ScenarioConfig, type Timeline,
 } from '../sim/types'
 import { cycleText } from './DeadlockPanel'
-import { formatMs } from './theme'
+import { Face, Icon, Person, Teller, type Mood } from './icons'
+import { PALETTE, formatMs } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -33,12 +34,12 @@ interface Point {
 const STATE_LABEL = { idle: 'Livre', serving: 'Atendendo', waiting: 'Esperando lock', deadlock: 'DEADLOCK', finished: 'Encerrado' }
 
 /** Humor de quem espera: vai piorando conforme a paciência acaba. */
-function mood(ratio: number): { face: string; level: 'calm' | 'bored' | 'angry' | 'furious' } {
-  if (ratio < 0.3) return { face: '🙂', level: 'calm' }
-  if (ratio < 0.6) return { face: '😐', level: 'calm' }
-  if (ratio < 0.85) return { face: '😒', level: 'bored' }
-  if (ratio < 1) return { face: '😠', level: 'angry' }
-  return { face: '🤬', level: 'furious' }
+function mood(ratio: number): { face: Mood; level: 'calm' | 'bored' | 'angry' | 'furious' } {
+  if (ratio < 0.3) return { face: 'happy', level: 'calm' }
+  if (ratio < 0.6) return { face: 'neutral', level: 'calm' }
+  if (ratio < 0.85) return { face: 'bored', level: 'bored' }
+  if (ratio < 1) return { face: 'angry', level: 'angry' }
+  return { face: 'furious', level: 'furious' }
 }
 
 function lerp(a: Point, b: Point, p: number, arc = 0): Point {
@@ -73,8 +74,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
   const { w, h } = size
   const vaultY = Math.max(58, h * 0.12)
   const tellerY = h * 0.41
-  const serveY = tellerY + 92
-  const queueTop = serveY + 104
+  const serveY = tellerY + 100
+  const queueTop = serveY + 118
   const vaultW = Math.min(170, w / config.accounts - 12)
   const tellerW = Math.min(190, w / config.tellers - 14)
   const vaultAt = (a: number): Point => ({ x: (w * (a + 0.5)) / config.accounts, y: vaultY })
@@ -84,10 +85,10 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
   const door: Point = { x: w - 36, y: h - 60 }
 
   // fila em cobrinha: o primeiro da fila fica à esquerda; aperta os lugares se não couber
-  const rowHeight = 70
+  const rowHeight = 84
   const rows = Math.max(1, Math.floor((h - queueTop - 6) / rowHeight))
   const lineWidth = w - 150
-  const slotWidth = Math.max(22, Math.min(56, (lineWidth * rows) / Math.max(1, view.queue.length)))
+  const slotWidth = Math.max(24, Math.min(62, (lineWidth * rows) / Math.max(1, view.queue.length)))
   const perRow = Math.max(1, Math.floor(lineWidth / slotWidth))
   const slotAt = (position: number): Point => ({
     x: 60 + (position % perRow) * slotWidth + slotWidth / 2,
@@ -108,7 +109,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
     if (!client) return
     const op = OPS[client.op]
     let at: Point
-    let face = '🙂'
+    let face: Mood = 'happy'
     let level = 'calm'
     let opacity = 1
     let ratio = -1
@@ -131,14 +132,14 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
     } else if (trace.endUs === 0 || trace.endUs > tUs) {
       at = { x: tellerAt(trace.teller).x, y: serveY }
       const teller = view.tellers[trace.teller]
-      face = teller?.state === 'deadlock' ? '😵' : teller?.state === 'waiting' ? '😬' : '😌'
+      face = teller?.state === 'deadlock' ? 'dizzy' : teller?.state === 'waiting' ? 'tense' : 'happy'
       level = teller?.state === 'deadlock' ? 'furious' : 'calm'
     } else {
       if (tUs - trace.endUs > fxUs * 1.4) return // já foi embora
       at = { x: tellerAt(trace.teller).x, y: serveY + 46 }
       opacity = 0
-      face = trace.result === RESULT_REFUSED ? '😞' : '😄'
-      bubble = trace.result === RESULT_REFUSED ? '✗ recusado' : ''
+      face = trace.result === RESULT_REFUSED ? 'sad' : 'happy'
+      bubble = trace.result === RESULT_REFUSED ? 'recusado' : ''
     }
 
     people.push(
@@ -148,13 +149,10 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
         style={{ transform: `translate(${at.x}px, ${at.y}px)`, opacity, zIndex: ratio >= 1 ? 3 : 2 }}
         title={`Cliente #${client.id} · ${op.label} · ${formatMoney(client.amount)}`}
       >
-        <span className="person-face" aria-hidden>
-          {face}
+        <span className="person-face">
+          <Person mood={face} color={PALETTE.ops[client.op]} preferential={client.priority === 1} size={54} />
         </span>
-        {client.priority === 1 && <span className="person-star" aria-label="preferencial">★</span>}
-        <span className="person-tag">
-          {op.icon}#{client.id}
-        </span>
+        <span className="person-tag">#{client.id}</span>
         {ratio >= 0 && (
           <span className="patience" aria-label="Paciência">
             <span className="patience-fill" style={{ width: `${Math.min(100, ratio * 100)}%` }} />
@@ -178,19 +176,19 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
     const vault = vaultAt(client.from)
     const desk = { x: tellerAt(trace.teller).x, y: tellerY - 30 }
     let at: Point
-    let label: string
+    let label: ReactNode
     if (client.op === OP_TRANSFER) {
       at = lerp({ x: vault.x, y: vaultY - 6 }, { x: vaultAt(client.to).x, y: vaultY - 6 }, p, 34)
-      label = `💸 ${formatMoney(client.amount)}`
+      label = <><Icon name="banknote" size={15} /> {formatMoney(client.amount)}</>
     } else if (client.op === OP_DEPOSIT) {
       at = lerp(desk, vault, p)
-      label = `💵 +${formatMoney(client.amount)}`
+      label = <><Icon name="banknote" size={15} /> +{formatMoney(client.amount)}</>
     } else if (client.op === OP_WITHDRAW) {
       at = lerp(vault, desk, p)
-      label = `💵 −${formatMoney(client.amount)}`
+      label = <><Icon name="banknote" size={15} /> −{formatMoney(client.amount)}</>
     } else if (client.op === OP_BILL) {
       at = lerp(vault, { x: vault.x + 40, y: -24 }, p)
-      label = `🧾 −${formatMoney(client.amount)}`
+      label = <><Icon name="bill" size={15} /> −{formatMoney(client.amount)}</>
     } else {
       return
     }
@@ -215,8 +213,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
         <div className={`hud-box starvation starvation-${worstMood.level}`}>
           <span className="hud-label">Starvation · paciência de {formatMs(patienceUs / 1000)}</span>
           <div className="starvation-row">
-            <span className="starvation-face" aria-hidden>
-              {view.queue.length ? worstMood.face : '😴'}
+            <span className="starvation-face">
+              <Face mood={view.queue.length ? worstMood.face : 'sleep'} size={40} />
             </span>
             <div className="starvation-meter">
               <span className="patience patience-big">
@@ -226,10 +224,12 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
                 {worst.client >= 0
                   ? `maior espera: ${formatMs(worst.waitUs / 1000)} (#${clients[worst.client].id})`
                   : 'ninguém esperando'}
-                {' · '}😠 {angry} · 🤬 {furious}
+              </span>
+              <span className="small mood-counts">
+                <Face mood="angry" size={16} /> {angry} irritados <Face mood="furious" size={16} /> {furious} furiosos
               </span>
               <span className="small muted">
-                espera média agora: ★ {formatMs(avg(waits.pref) / 1000)} · comuns {formatMs(avg(waits.common) / 1000)}
+                espera média agora: preferenciais {formatMs(avg(waits.pref) / 1000)}, comuns {formatMs(avg(waits.common) / 1000)}
               </span>
             </div>
           </div>
@@ -243,7 +243,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
             real <strong>{formatMoney(view.realTotal)}</strong>
           </span>
           <strong className="hud-diff">
-            {view.realTotal === view.expectedTotal ? '✓ confere' : `✗ ${formatMoney(view.realTotal - view.expectedTotal)}`}
+            <Icon name={view.realTotal === view.expectedTotal ? 'check' : 'x'} size={15} />{' '}
+            {view.realTotal === view.expectedTotal ? 'confere' : formatMoney(view.realTotal - view.expectedTotal)}
           </strong>
         </div>
       </header>
@@ -276,12 +277,26 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
               style={{ transform: `translate(${at.x}px, ${at.y}px)`, width: vaultW }}
             >
               <div className="stage-vault-head">
-                <span>🏦 Conta {accountName(a)}</span>
-                <span>{account.owner >= 0 ? `🔒 C${account.owner + 1}` : lockMode === 'ordered' || lockMode === 'unordered' ? '🔓' : ''}</span>
+                <span className="stage-vault-name">
+                  <Icon name="vault" size={16} /> Conta {accountName(a)}
+                </span>
+                <span className="stage-vault-name">
+                  {account.owner >= 0 ? (
+                    <><Icon name="lock" size={13} /> C{account.owner + 1}</>
+                  ) : lockMode === 'ordered' || lockMode === 'unordered' ? (
+                    <Icon name="unlock" size={13} />
+                  ) : null}
+                </span>
               </div>
               <strong className={wrong ? 'bad' : ''}>{formatMoney(account.balance)}</strong>
               <span className={`small ${wrong ? 'bad' : 'muted'}`}>
-                {wrong ? `✗ deveria ser ${formatMoney(account.expected)}` : account.waiters.length ? `⏳ ${account.waiters.map((t) => `C${t + 1}`).join(', ')}` : '✓ confere'}
+                {wrong ? (
+                  <><Icon name="x" size={12} /> deveria ser {formatMoney(account.expected)}</>
+                ) : account.waiters.length ? (
+                  <><Icon name="hourglass" size={12} /> {account.waiters.map((t) => `C${t + 1}`).join(', ')}</>
+                ) : (
+                  <><Icon name="check" size={12} /> confere</>
+                )}
               </span>
             </div>
           )
@@ -289,8 +304,9 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
 
         {lockMode === 'global' && (
           <div className={`stage-global ${view.globalLock.owner >= 0 ? 'stage-vault-locked' : ''}`} style={{ transform: `translate(${globalAt.x}px, ${globalAt.y}px)` }}>
-            {view.globalLock.owner >= 0 ? `🔐 Lock global: Caixa ${view.globalLock.owner + 1}` : '🔓 Lock global livre'}
-            {view.globalLock.waiters.length > 0 && ` · ⏳ ${view.globalLock.waiters.length}`}
+            <Icon name={view.globalLock.owner >= 0 ? 'lock' : 'unlock'} size={14} />
+            {view.globalLock.owner >= 0 ? `Lock global: Caixa ${view.globalLock.owner + 1}` : 'Lock global livre'}
+            {view.globalLock.waiters.length > 0 && <> · <Icon name="hourglass" size={13} /> {view.globalLock.waiters.length}</>}
           </div>
         )}
 
@@ -299,18 +315,18 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
           return (
             <div key={t} className={`stage-teller teller-${teller.state}`} style={{ transform: `translate(${at.x}px, ${at.y}px)`, width: tellerW }}>
               <div className="stage-teller-head">
-                <span className="stage-teller-face" aria-hidden>
-                  {teller.state === 'deadlock' ? '☠' : teller.state === 'waiting' ? '⏳' : '🧑‍💼'}
+                <span className="stage-teller-face">
+                  <Teller state={teller.state} size={38} />
                 </span>
                 <div>
                   <strong>Caixa {t + 1}</strong>
                   <span className="small">{STATE_LABEL[teller.state]}</span>
                 </div>
-                <span className="stage-teller-count small muted">{teller.served} ✓</span>
               </div>
               <div className="progress">
                 <div className="progress-bar" style={{ width: `${Math.round(teller.progress * 100)}%` }} />
               </div>
+              <span className="small muted stage-teller-served">{teller.served} atendidos</span>
               <span className="small muted stage-teller-op">
                 {clients[teller.client]
                   ? `${OPS[clients[teller.client].op].label} · ${accountName(clients[teller.client].from)}${clients[teller.client].to >= 0 ? ` → ${accountName(clients[teller.client].to)}` : ''}`
@@ -324,7 +340,11 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
           Fila · {view.queue.length} esperando · {view.notArrived} a caminho · {view.done} atendidos
         </div>
         <div className="stage-door" style={{ transform: `translate(${door.x}px, ${door.y}px)` }} aria-hidden>
-          🚪
+          <svg viewBox="0 0 40 56" width={40} height={56}>
+            <rect x="2" y="2" width="36" height="52" rx="2" fill="#ffffff" stroke="#ec0000" strokeWidth="3" />
+            <rect x="8" y="8" width="24" height="18" fill="#fdecec" />
+            <circle cx="30" cy="32" r="2" fill="#ec0000" />
+          </svg>
           <span className="small muted">entrada</span>
         </div>
 
@@ -333,7 +353,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
 
         {deadlock && view.deadlockVisible && (
           <div className="stage-deadlock" role="alert">
-            <strong>☠ DEADLOCK em {formatMs(deadlock.atUs / 1000)}</strong>
+            <strong><Icon name="skull" size={20} /> DEADLOCK em {formatMs(deadlock.atUs / 1000)}</strong>
             <span>{deadlock.reason === 'cycle' ? cycleText(deadlock, config.accounts) : 'Nenhum progresso com caixas esperando lock.'}</span>
           </div>
         )}

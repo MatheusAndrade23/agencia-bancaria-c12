@@ -199,7 +199,7 @@ export function Gantt({ config, clients, timeline, tUs, deadlock, rowHeight = 30
       {hover && hovered && trace && (
         <div className="tooltip" style={{ left: Math.min(hover.x + 12, width - 220), top: hover.y + 14 }}>
           <strong>
-            Cliente #{hovered.id} {hovered.priority === 1 ? '★ preferencial' : ''}
+            Cliente #{hovered.id} {hovered.priority === 1 ? '(preferencial)' : ''}
           </strong>
           <div>
             {OPS[hovered.op].label} · {formatMoney(hovered.amount)} · {accountName(hovered.from)}

@@ -1,3 +1,4 @@
+import { Icon } from './icons'
 import { useMemo, useState } from 'react'
 import { meanAndSd } from '../sim/metrics'
 import { generateQueue } from '../sim/queue'
@@ -27,15 +28,15 @@ interface MetricOption {
 
 const METRIC_OPTIONS: MetricOption[] = [
   { key: 'waitAvg', label: 'Espera média na fila', value: (m) => m.waitAvgMs, format: formatMs },
-  { key: 'waitCommon', label: 'Espera média — comuns', value: (m) => m.waitCommonAvgMs, format: formatMs },
-  { key: 'waitPref', label: 'Espera média — preferenciais', value: (m) => m.waitPrefAvgMs, format: formatMs },
+  { key: 'waitCommon', label: 'Espera média dos comuns', value: (m) => m.waitCommonAvgMs, format: formatMs },
+  { key: 'waitPref', label: 'Espera média dos preferenciais', value: (m) => m.waitPrefAvgMs, format: formatMs },
   { key: 'waitMax', label: 'Espera máxima', value: (m) => m.waitMaxMs, format: formatMs },
   { key: 'turnaround', label: 'Turnaround médio', value: (m) => m.turnaroundAvgMs, format: formatMs },
   { key: 'makespan', label: 'Makespan', value: (m) => m.makespanMs, format: formatMs },
   { key: 'throughput', label: 'Throughput (clientes/s)', value: (m) => m.throughput, format: (v) => formatNumber(v) },
-  { key: 'rho', label: 'ρ — carga por caixa (< 1 dá conta)', value: (m) => m.rho ?? 0, format: (v) => formatNumber(v, 2) },
-  { key: 'littleLq', label: 'Lq — clientes na fila (Little)', value: (m) => m.littleLq ?? 0, format: (v) => formatNumber(v, 2) },
-  { key: 'littleL', label: 'L — clientes na agência (Little)', value: (m) => m.littleL ?? 0, format: (v) => formatNumber(v, 2) },
+  { key: 'rho', label: 'ρ, carga por caixa (abaixo de 1 dá conta)', value: (m) => m.rho ?? 0, format: (v) => formatNumber(v, 2) },
+  { key: 'littleLq', label: 'Lq, clientes na fila (Little)', value: (m) => m.littleLq ?? 0, format: (v) => formatNumber(v, 2) },
+  { key: 'littleL', label: 'L, clientes na agência (Little)', value: (m) => m.littleL ?? 0, format: (v) => formatNumber(v, 2) },
   { key: 'lockWait', label: 'Tempo esperando lock', value: (m) => m.lockWaitTotalMs, format: formatMs },
   { key: 'money', label: 'Dinheiro inconsistente (módulo)', value: (m) => Math.abs(m.inconsistentCents), format: (v) => formatMoney(Math.round(v)) },
 ]
@@ -54,8 +55,8 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunR
   { key: 'waitCommon', label: 'Comuns', numeric: true, value: (r) => r.metrics.waitCommonAvgMs, render: (r) => formatMs(r.metrics.waitCommonAvgMs) },
   { key: 'turnaround', label: 'Turnaround', numeric: true, value: (r) => r.metrics.turnaroundAvgMs, render: (r) => formatMs(r.metrics.turnaroundAvgMs) },
   { key: 'throughput', label: 'Clientes/s', numeric: true, value: (r) => r.metrics.throughput, render: (r) => formatNumber(r.metrics.throughput) },
-  { key: 'rho', label: 'ρ', numeric: true, value: (r) => r.metrics.rho ?? 0, render: (r) => (r.metrics.rho === undefined ? '—' : <span title={r.metrics.rho < 1 ? 'os caixas dão conta' : 'chega mais trabalho do que os caixas atendem'}>{formatNumber(r.metrics.rho, 2)} {r.metrics.rho < 1 ? '✓' : '⚠'}</span>) },
-  { key: 'littleLq', label: 'Lq (Little)', numeric: true, value: (r) => r.metrics.littleLq ?? 0, render: (r) => (r.metrics.littleLq === undefined ? '—' : formatNumber(r.metrics.littleLq, 2)) },
+  { key: 'rho', label: 'ρ', numeric: true, value: (r) => r.metrics.rho ?? 0, render: (r) => (r.metrics.rho === undefined ? '-' : <span title={r.metrics.rho < 1 ? 'os caixas dão conta' : 'chega mais trabalho do que os caixas atendem'}>{formatNumber(r.metrics.rho, 2)} <Icon name={r.metrics.rho < 1 ? 'check' : 'alert'} size={12} /></span>) },
+  { key: 'littleLq', label: 'Lq (Little)', numeric: true, value: (r) => r.metrics.littleLq ?? 0, render: (r) => (r.metrics.littleLq === undefined ? '-' : formatNumber(r.metrics.littleLq, 2)) },
   { key: 'lockWait', label: 'Esp. lock', numeric: true, value: (r) => r.metrics.lockWaitTotalMs, render: (r) => formatMs(r.metrics.lockWaitTotalMs) },
   { key: 'money', label: 'Inconsistente', numeric: true, value: (r) => Math.abs(r.metrics.inconsistentCents), render: (r) => <span className={r.metrics.inconsistentCents !== 0 ? 'bad' : ''}>{formatMoney(r.metrics.inconsistentCents)}</span> },
   { key: 'wrong', label: 'Contas erradas', numeric: true, value: (r) => r.metrics.wrongAccounts, render: (r) => <span className={r.metrics.wrongAccounts ? 'bad' : ''}>{r.metrics.wrongAccounts}</span> },
@@ -125,7 +126,7 @@ export function Comparacoes({ runs, onDelete, onClearAll }: Props) {
           <span className="muted">{runs.length} no navegador (localStorage)</span>
           <span className="spacer" />
           <button type="button" className="btn btn-small btn-danger" onClick={onClearAll}>
-            🗑 Limpar tudo
+            <Icon name="trash" size={14} /> Limpar tudo
           </button>
         </header>
 
@@ -181,7 +182,7 @@ export function Comparacoes({ runs, onDelete, onClearAll }: Props) {
                     <th key={column.key} className={column.numeric ? 'num' : ''} aria-sort={sort.key === column.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" className="th-btn" onClick={() => toggleSort(column.key)}>
                         {column.label}
-                        {sort.key === column.key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
+                        {sort.key === column.key && <Icon name={sort.dir === 1 ? 'chevron-up' : 'chevron-down'} size={12} />}
                       </button>
                     </th>
                   ))}
@@ -216,7 +217,7 @@ export function Comparacoes({ runs, onDelete, onClearAll }: Props) {
                           onDelete(run.id)
                         }}
                       >
-                        ✕
+                        <Icon name="x" size={14} />
                       </button>
                     </td>
                   </tr>
@@ -344,7 +345,7 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
                   if (cell.total === 0) {
                     return (
                       <td key={cell.lockMode} className="heat-empty">
-                        —
+                        -
                       </td>
                     )
                   }
@@ -353,7 +354,7 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
                       <td key={cell.lockMode} className={cell.deadlocks ? 'heat-deadlock' : 'heat-empty'}>
                         {cell.deadlocks ? (
                           <>
-                            <strong>☠ DEADLOCK</strong>
+                            <strong><Icon name="skull" size={14} /> DEADLOCK</strong>
                             <small>
                               {cell.deadlocks} de {cell.total}
                             </small>
@@ -374,7 +375,7 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
                       <strong>{metric.format(cell.stats.mean)}</strong>
                       <small>
                         {cell.stats.n > 1 ? `± ${metric.format(cell.stats.sd)} · n=${cell.stats.n}` : 'n=1'}
-                        {cell.deadlocks > 0 && ` · ☠ ${cell.deadlocks}`}
+                        {cell.deadlocks > 0 && ` · ${cell.deadlocks} em deadlock`}
                       </small>
                     </td>
                   )

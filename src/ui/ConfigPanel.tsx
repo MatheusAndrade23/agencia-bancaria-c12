@@ -1,3 +1,4 @@
+import { Icon, OpIcon } from './icons'
 import { useMemo } from 'react'
 import { LIMITS, PRESETS, scenarioId } from '../sim/queue'
 import { OPS, type OpMix, type SavedScenario, type ScenarioConfig } from '../sim/types'
@@ -106,7 +107,7 @@ export function ConfigPanel(props: Props) {
           {OPS.map((op) => (
             <label key={op.key} className={`mix op-${op.key}`}>
               <span>
-                <span aria-hidden>{op.icon}</span> {op.label}{' '}
+                <OpIcon op={op.key} size={18} /> {op.label}{' '}
                 <span className="muted small">
                   ~{formatMs((op.baseMs * config.durationScalePct) / 100)}
                   {op === slowest && ' · mais lenta'}
@@ -162,7 +163,7 @@ export function ConfigPanel(props: Props) {
                   seed {scenario.config.seed} · <code>{scenario.id}</code>
                 </span>
                 <button type="button" className="icon-btn" aria-label={`Excluir cenário ${scenario.name}`} onClick={() => props.onDeleteScenario(scenario.name)}>
-                  ✕
+                  <Icon name="x" size={14} />
                 </button>
               </li>
             ))}

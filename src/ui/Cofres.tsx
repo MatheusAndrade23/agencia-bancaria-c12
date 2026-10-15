@@ -1,3 +1,4 @@
+import { Icon } from './icons'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { AgencyView } from '../sim/timeline'
 import { accountName, formatMoney, type LockMode, type ScenarioConfig } from '../sim/types'
@@ -33,7 +34,7 @@ export function Invariante({ view }: { view: AgencyView }) {
       <div>
         <span className="muted small">Dinheiro inconsistente</span>
         <strong>
-          {diff === 0 ? '✓ ' : '✗ '}
+          <Icon name={diff === 0 ? 'check' : 'x'} size={16} />
           {diff > 0 ? '+' : ''}
           {formatMoney(diff)}
         </strong>
@@ -72,8 +73,9 @@ export function Cofres({ config, lockMode, view }: Props) {
         <h2>Cofres</h2>
         {lockMode === 'global' && (
           <span className={`lock-tag ${view.globalLock.owner >= 0 ? 'lock-tag-held' : ''}`}>
-            {view.globalLock.owner >= 0 ? `🔒 Lock global: Caixa ${view.globalLock.owner + 1}` : '🔓 Lock global livre'}
-            {view.globalLock.waiters.length > 0 && ` · ⏳ ${tellerList(view.globalLock.waiters)}`}
+            <Icon name={view.globalLock.owner >= 0 ? 'lock' : 'unlock'} size={13} />
+            {view.globalLock.owner >= 0 ? `Lock global: Caixa ${view.globalLock.owner + 1}` : 'Lock global livre'}
+            {view.globalLock.waiters.length > 0 && <> · <Icon name="hourglass" size={12} /> {tellerList(view.globalLock.waiters)}</>}
           </span>
         )}
         {lockMode === 'none' && <span className="muted">sem cadeados: qualquer caixa mexe em qualquer conta</span>}
@@ -91,15 +93,19 @@ export function Cofres({ config, lockMode, view }: Props) {
               <div className="vault-head">
                 <strong>Conta {accountName(a)}</strong>
                 <span className="vault-lock">
-                  {account.owner >= 0 ? `🔒 Caixa ${account.owner + 1}` : lockMode === 'none' || lockMode === 'global' ? '' : '🔓 livre'}
+                  {account.owner >= 0 ? (
+                    <><Icon name="lock" size={12} /> Caixa {account.owner + 1}</>
+                  ) : lockMode === 'none' || lockMode === 'global' ? null : (
+                    <><Icon name="unlock" size={12} /> livre</>
+                  )}
                 </span>
               </div>
               <div className={`vault-balance ${wrong ? 'bad' : ''}`}>{formatMoney(account.balance)}</div>
               <div className={`small ${wrong ? 'bad' : 'muted'}`}>
-                {wrong ? `✗ deveria ser ${formatMoney(account.expected)}` : '✓ confere'}
+                <Icon name={wrong ? 'x' : 'check'} size={12} /> {wrong ? `deveria ser ${formatMoney(account.expected)}` : 'confere'}
               </div>
               <div className="vault-waiters small">
-                {account.waiters.length > 0 ? `⏳ ${tellerList(account.waiters)}` : ' '}
+                {account.waiters.length > 0 ? <><Icon name="hourglass" size={12} /> {tellerList(account.waiters)}</> : ' '}
               </div>
             </div>
           )
@@ -114,7 +120,7 @@ export function Cofres({ config, lockMode, view }: Props) {
           const y = from.y + (to.y - from.y) * eased - Math.sin(p * Math.PI) * 26
           return (
             <div key={fx.client} className="money" style={{ left: x, top: y, opacity: p > 0.85 ? (1 - p) / 0.15 : 1 }}>
-              💸 {formatMoney(fx.amount)}
+              <Icon name="banknote" size={14} /> {formatMoney(fx.amount)}
             </div>
           )
         })}

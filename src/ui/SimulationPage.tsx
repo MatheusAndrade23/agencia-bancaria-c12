@@ -13,6 +13,7 @@ import { Fila } from './Fila'
 import { Gantt } from './Gantt'
 import { LittlePanel, MetricsSummary, StatusBadge } from './MetricsSummary'
 import { Palco } from './Palco'
+import { Icon } from './icons'
 import { formatMs } from './theme'
 
 interface Props {
@@ -238,10 +239,10 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
         </label>
         <div className="control-buttons">
           <button type="button" className="btn btn-primary" disabled={running || !isolated} onClick={start}>
-            ▶ Iniciar
+            <Icon name="play" size={14} /> Iniciar
           </button>
           <button type="button" className="btn" disabled={!running} onClick={stop}>
-            ■ Parar
+            <Icon name="stop" size={13} /> Parar
           </button>
           <button
             type="button"
@@ -250,7 +251,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
             onClick={startAll}
             title="Roda as 16 combinações de algoritmo × sincronismo sobre este cenário, uma após a outra"
           >
-            ⏩ Rodar as 16 combinações
+            <Icon name="forward" size={15} /> Rodar as 16 combinações
           </button>
         </div>
     </>
@@ -280,25 +281,25 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
               <strong>
                 {ALGORITHM_LABEL[shown.algorithm]} × {LOCK_MODE_LABEL[shown.lockMode]}
               </strong>
-              {status ? <StatusBadge status={status} /> : <span className="status status-running">● Executando</span>}
+              {status ? <StatusBadge status={status} /> : <span className="status status-running"><Icon name="play" /> Executando</span>}
               <span className="muted">
                 t = {formatMs(frame.tUs / 1000)} de {formatMs(frame.liveUs / 1000)}
               </span>
               {deadlock && !frame.view.deadlockVisible && (
-                <span className="status status-deadlock">☠ deadlock em {formatMs(deadlock.atUs / 1000)} (a animação chega lá)</span>
+                <span className="status status-deadlock"><Icon name="skull" /> deadlock em {formatMs(deadlock.atUs / 1000)} (a animação ainda vai chegar lá)</span>
               )}
             </div>
   )
   const playbackControls = frame && (
             <div className="playback-controls">
               <button type="button" className="btn btn-small" onClick={() => setPaused(!paused)} disabled={atEnd}>
-                {paused ? '▶ Continuar' : '⏸ Pausar'}
+                {paused ? <><Icon name="play" size={12} /> Continuar</> : <><Icon name="pause" size={12} /> Pausar</>}
               </button>
               <button type="button" className="btn btn-small" onClick={replay}>
-                ↺ Rever do início
+                <Icon name="replay" size={13} /> Rever do início
               </button>
               <button type="button" className="btn btn-small" onClick={() => seek(frame.liveUs)} disabled={atEnd}>
-                ⏭ Ir para o fim
+                <Icon name="skip" size={13} /> Ir para o fim
               </button>
               <input
                 type="range"
@@ -329,7 +330,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
           header={
             playbackInfo ?? (
               <div className="playback-info">
-                <strong>🏦 {scenarioName}</strong>
+                <strong>{scenarioName}</strong>
                 <span className="muted">escolha o algoritmo e o sincronismo e clique em Iniciar</span>
               </div>
             )
@@ -346,7 +347,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
               {speedControl}
               {playbackControls}
               <button type="button" className="btn btn-small" onClick={leaveStage}>
-                ✕ Sair da tela cheia (Esc)
+                <Icon name="x" size={13} /> Sair da tela cheia (Esc)
               </button>
             </>
           }
@@ -370,7 +371,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
         </span>
         <span className="spacer" />
         <button type="button" className="btn btn-small" disabled={running} onClick={onEditScenario}>
-          ✎ Editar cenário e ver a fila
+          <Icon name="edit" size={13} /> Editar cenário e ver a fila
         </button>
       </section>
 
@@ -378,7 +379,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
         {runControls}
         <label className="check" title="Mostra a agência em tela cheia, com as pessoas andando da fila até os caixas. Esc para sair.">
           <input type="checkbox" checked={stage} onChange={(e) => (e.target.checked ? enterStage() : leaveStage())} />
-          🖥 Tela cheia
+          <Icon name="fullscreen" size={15} /> Tela cheia
         </label>
         {speedControl}
       </section>

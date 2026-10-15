@@ -15,31 +15,31 @@ export interface Palette {
 }
 
 export const PALETTE: Palette = {
-  surface: '#1a1a19',
-  text: '#ffffff',
-  textSecondary: '#c3c2b7',
-  textMuted: '#8f8e86',
-  grid: '#33332f',
-  ops: ['#199e70', '#d95926', '#3987e5', '#c98500', '#d55181'],
-  series: ['#3987e5', '#d95926', '#199e70', '#c98500'],
-  sequential: ['#0d366b', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4', '#cde2fb'],
-  good: '#0ca30c',
-  warning: '#fab219',
-  critical: '#d03b3b',
+  surface: '#ffffff',
+  text: '#222222',
+  textSecondary: '#4a4a4a',
+  textMuted: '#767676',
+  grid: '#e6e6e6',
+  ops: ['#1baf7a', '#eb6834', '#2a78d6', '#eda100', '#e87ba4'],
+  series: ['#ec0000', '#2a78d6', '#1baf7a', '#eda100'],
+  sequential: ['#fde3e3', '#f9b8b8', '#f48a8a', '#ee5555', '#ec0000', '#b50000', '#7a0000'],
+  good: '#2e8540',
+  warning: '#e8a400',
+  critical: '#c00000',
 }
 
 /** Texto legível sobre um passo da rampa sequencial. */
 export function sequentialInk(step: number): string {
-  return step <= 2 ? '#ffffff' : '#0b0b0b'
+  return step >= 4 ? '#ffffff' : '#222222'
 }
 
 /** Cor estável por cliente (ângulo áureo espalha os matizes). */
 export function clientColor(id: number): string {
-  return `hsl(${(id * 137.508) % 360} 52% 52%)`
+  return `hsl(${(id * 137.508) % 360} 60% 62%)`
 }
 
 export function formatMs(ms: number): string {
-  if (!Number.isFinite(ms)) return '—'
+  if (!Number.isFinite(ms)) return '-'
   if (Math.abs(ms) >= 1000) return `${(ms / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} s`
   return `${ms.toLocaleString('pt-BR', { maximumFractionDigits: ms < 10 ? 1 : 0 })} ms`
 }

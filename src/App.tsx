@@ -6,6 +6,7 @@ import { Comparacoes } from './ui/Comparacoes'
 import { ConfigPanel } from './ui/ConfigPanel'
 import { QueuePage } from './ui/QueuePage'
 import { SimulationPage } from './ui/SimulationPage'
+import { LogoMark } from './ui/icons'
 
 type Tab = 'scenario' | 'sim' | 'compare'
 
@@ -48,7 +49,7 @@ export function App() {
   }
 
   function clearAll() {
-    if (!window.confirm('Apagar TODAS as execuções e cenários salvos neste navegador? Isso não pode ser desfeito.')) return
+    if (!window.confirm('Apagar todas as execuções e cenários salvos neste navegador? Não dá para desfazer.')) return
     storage.clearAll()
     setRuns([])
     setScenarios([])
@@ -56,12 +57,13 @@ export function App() {
 
   return (
     <div className="app">
+      <div className="topbar-wrap">
       <header className="topbar">
         <div className="brand">
-          <span aria-hidden>🏦</span>
+          <LogoMark size={36} color="#ffffff" />
           <div>
-            <h1>Agência Bancária</h1>
-            <span className="muted small">Escalonamento e sincronismo de threads — Sistemas Operacionais</span>
+            <span className="brand-name">Itander</span>
+            <span className="muted small">Simulador de agência: escalonamento e sincronismo de threads</span>
           </div>
         </div>
         <nav className="tabs" aria-label="Telas">
@@ -76,6 +78,7 @@ export function App() {
           </button>
         </nav>
       </header>
+      </div>
 
       {!isolated && (
         <div className="banner banner-error" role="alert">

@@ -133,7 +133,7 @@ function ChartCard({ title, subtitle, labels, series, format }: ChartCardProps) 
                   const stat = s.stats[i]
                   return (
                     <td key={s.label}>
-                      {stat.n === 0 ? '—' : `${format(stat.mean)}${stat.n > 1 ? ` ± ${format(stat.sd)}` : ''} (n=${stat.n})`}
+                      {stat.n === 0 ? '-' : `${format(stat.mean)}${stat.n > 1 ? ` ± ${format(stat.sd)}` : ''} (n=${stat.n})`}
                     </td>
                   )
                 })}

@@ -1,3 +1,4 @@
+import { Icon } from './icons'
 import { lockName, type DeadlockInfo } from '../sim/types'
 import { formatMs } from './theme'
 
@@ -29,7 +30,7 @@ export function DeadlockPanel({ deadlock, accounts }: Props) {
   return (
     <section className="panel deadlock-panel" role="alert">
       <header className="panel-header">
-        <h2>☠ Deadlock detectado em {formatMs(deadlock.atUs / 1000)}</h2>
+        <h2><Icon name="skull" size={18} /> Deadlock detectado em {formatMs(deadlock.atUs / 1000)}</h2>
       </header>
       {deadlock.reason === 'cycle' ? (
         <>
@@ -60,7 +61,7 @@ export function DeadlockPanel({ deadlock, accounts }: Props) {
             })}
             {nodes.map((node, i) => (
               <g key={i} transform={`translate(${points[i].x} ${points[i].y})`}>
-                <rect x={-38} y={-15} width={76} height={30} rx={node.kind === 'teller' ? 6 : 15} className={`cycle-node cycle-node-${node.kind}`} />
+                <rect x={-38} y={-15} width={76} height={30} rx={4} className={`cycle-node cycle-node-${node.kind}`} />
                 <text textAnchor="middle" dominantBaseline="central" className="cycle-label">
                   {node.label}
                 </text>
@@ -68,8 +69,8 @@ export function DeadlockPanel({ deadlock, accounts }: Props) {
             ))}
           </svg>
           <p className="muted small">
-            Seta tracejada: o caixa <em>espera</em> o cadeado. Seta contínua: o cadeado <em>está em posse</em> do caixa.
-            Ninguém solta o que tem, então ninguém consegue o que quer.
+            Seta tracejada: o caixa espera o cadeado. Seta contínua: o cadeado está com o caixa. Cada caixa segura um
+            cadeado e espera o do próximo, por isso nenhum deles avança.
           </p>
         </>
       ) : (

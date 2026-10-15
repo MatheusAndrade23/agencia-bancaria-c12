@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scenarioId } from '../sim/queue'
-import {
-  OPS, OP_TRANSFER, accountName, formatMoney,
-  type Client, type ScenarioConfig,
-} from '../sim/types'
-import { PALETTE, formatMs, formatNumber, sequentialInk } from './theme'
+import { OPS, accountName, formatMoney, type Client, type ScenarioConfig } from '../sim/types'
+import { Icon, OpIcon, Person } from './icons'
+import { PALETTE, formatMs, formatNumber } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -13,36 +11,22 @@ interface Props {
   onGoToSimulation(): void
 }
 
-const CHIP_WIDTH = 38
-const LANE_HEIGHT = 24
+const AVATAR_WIDTH = 30
+const LANE_HEIGHT = 44
+const BUCKETS = 14
 
 function clientTitle(client: Client): string {
   const accounts = `${accountName(client.from)}${client.to >= 0 ? ` → ${accountName(client.to)}` : ''}`
   return (
     `Cliente #${client.id}${client.priority === 1 ? ' (preferencial)' : ''}\n` +
-    `${OPS[client.op].label} · ${formatMoney(client.amount)} · conta ${accounts}\n` +
-    `chega em ${formatMs(client.arrivalUs / 1000)} · dura ${formatMs(client.durationUs / 1000)}`
+    `${OPS[client.op].label} de ${formatMoney(client.amount)}, conta ${accounts}\n` +
+    `chega em ${formatMs(client.arrivalUs / 1000)} e leva ${formatMs(client.durationUs / 1000)}`
   )
 }
 
-/** Chip pequeno de um cliente: cor = operação, estrela = preferencial. */
-function MiniChip({ client, style }: { client: Client; style?: React.CSSProperties }) {
-  return (
-    <span
-      className={`mini-chip op-${OPS[client.op].key} ${client.priority === 1 ? 'mini-chip-pref' : ''}`}
-      style={style}
-      title={clientTitle(client)}
-    >
-      {client.priority === 1 && <span aria-hidden>★</span>}
-      {client.id}
-    </span>
-  )
-}
-
-/** Linha do tempo das chegadas: cada cliente aparece no instante em que entra na agência. */
-function ArrivalTimeline({ clients }: { clients: Client[] }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(800)
+function useWidth<T extends HTMLElement>(fallback: number) {
+  const ref = useRef<T>(null)
+  const [width, setWidth] = useState(fallback)
   useEffect(() => {
     const element = ref.current
     if (!element) return
@@ -50,29 +34,38 @@ function ArrivalTimeline({ clients }: { clients: Client[] }) {
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  return [ref, width] as const
+}
 
+/** Cada cliente aparece no instante em que chega, como gente andando na calçada até a agência. */
+function ArrivalStreet({ clients }: { clients: Client[] }) {
+  const [ref, width] = useWidth<HTMLDivElement>(900)
   const spanUs = Math.max(1, clients[clients.length - 1]?.arrivalUs ?? 1)
   const { placed, lanes } = useMemo(() => {
-    // empilha em faixas os clientes que chegam quase juntos, para os chips não se sobreporem
+    // quem chega quase junto vai para outra faixa, para ninguém ficar em cima do outro
     const laneRight: number[] = []
     const placed = clients.map((client) => {
-      const x = (client.arrivalUs / spanUs) * (width - CHIP_WIDTH)
+      const x = (client.arrivalUs / spanUs) * (width - AVATAR_WIDTH)
       let lane = laneRight.findIndex((right) => right + 2 <= x)
       if (lane < 0) lane = laneRight.length
-      laneRight[lane] = x + CHIP_WIDTH
+      laneRight[lane] = x + AVATAR_WIDTH
       return { client, x, lane }
     })
     return { placed, lanes: Math.max(1, laneRight.length) }
   }, [clients, spanUs, width])
 
   return (
-    <div className="arrivals" ref={ref}>
-      <div className="arrivals-plot" style={{ height: lanes * LANE_HEIGHT }}>
+    <div className="street" ref={ref}>
+      <div className="street-crowd" style={{ height: lanes * LANE_HEIGHT + 6 }}>
         {placed.map(({ client, x, lane }) => (
-          <MiniChip key={client.id} client={client} style={{ position: 'absolute', left: x, bottom: lane * LANE_HEIGHT, width: CHIP_WIDTH - 2 }} />
+          <div key={client.id} className="street-person" style={{ left: x, bottom: lane * LANE_HEIGHT + 4 }} title={clientTitle(client)}>
+            <Person mood="happy" color={PALETTE.ops[client.op]} preferential={client.priority === 1} size={34} />
+            <span>{client.id}</span>
+          </div>
         ))}
       </div>
-      <div className="arrivals-axis">
+      <div className="street-road" />
+      <div className="street-axis">
         {[0, 0.25, 0.5, 0.75, 1].map((fraction) => (
           <span key={fraction} style={{ left: `${fraction * 100}%` }} className={fraction === 0 ? 'tick-first' : fraction === 1 ? 'tick-last' : ''}>
             {formatMs((spanUs * fraction) / 1000)}
@@ -83,105 +76,131 @@ function ArrivalTimeline({ clients }: { clients: Client[] }) {
   )
 }
 
+/** Chegadas por intervalo comparadas com o que os caixas conseguem atender no mesmo intervalo. */
+function ArrivalRhythm({ clients, config }: { clients: Client[]; config: ScenarioConfig }) {
+  const spanUs = Math.max(1, clients[clients.length - 1]?.arrivalUs ?? 1)
+  const bucketUs = spanUs / BUCKETS
+  const counts = new Array<number>(BUCKETS).fill(0)
+  for (const client of clients) counts[Math.min(BUCKETS - 1, Math.floor(client.arrivalUs / bucketUs))]++
+  const serviceUs = clients.reduce((sum, c) => sum + c.durationUs, 0) / Math.max(1, clients.length) + config.criticalWindowMs * 1000
+  const capacity = (config.tellers * bucketUs) / serviceUs
+  const top = Math.max(capacity, ...counts) * 1.15
+  const height = 150
+  const y = (value: number) => height - (value / top) * height
+
+  return (
+    <div className="rhythm">
+      <svg viewBox={`0 0 ${BUCKETS * 40} ${height + 22}`} preserveAspectRatio="none" className="rhythm-svg" role="img" aria-label="Chegadas por intervalo de tempo e capacidade dos caixas">
+        {counts.map((count, i) => (
+          <g key={i}>
+            <rect
+              x={i * 40 + 5}
+              y={y(count)}
+              width={30}
+              height={height - y(count)}
+              rx={3}
+              className={count > capacity ? 'rhythm-bar rhythm-over' : 'rhythm-bar'}
+            >
+              <title>{`${count} chegadas entre ${formatMs((i * bucketUs) / 1000)} e ${formatMs(((i + 1) * bucketUs) / 1000)}`}</title>
+            </rect>
+            {count > 0 && (
+              <text x={i * 40 + 20} y={y(count) - 4} textAnchor="middle" className="rhythm-label">
+                {count}
+              </text>
+            )}
+          </g>
+        ))}
+        <line x1={0} x2={BUCKETS * 40} y1={y(capacity)} y2={y(capacity)} className="rhythm-capacity" />
+        <line x1={0} x2={BUCKETS * 40} y1={height} y2={height} className="rhythm-base" />
+      </svg>
+      <div className="rhythm-legend small">
+        <span>
+          <i className="swatch rhythm-swatch" /> chegadas por intervalo de {formatMs(bucketUs / 1000)}
+        </span>
+        <span>
+          <i className="swatch rhythm-swatch rhythm-swatch-over" /> acima da capacidade
+        </span>
+        <span>
+          <i className="rhythm-line-swatch" /> os {config.tellers} caixas atendem cerca de {formatNumber(capacity)} clientes por intervalo
+        </span>
+      </div>
+    </div>
+  )
+}
+
 /** Tela que mostra, antes de rodar, como é a fila que o cenário gera. */
 export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: Props) {
-  const [asTable, setAsTable] = useState(false)
-
   const stats = useMemo(() => {
     const preferential = clients.filter((c) => c.priority === 1).length
     const workUs = clients.reduce((sum, c) => sum + c.durationUs + config.criticalWindowMs * 1000, 0)
     const spanUs = clients[clients.length - 1]?.arrivalUs ?? 0
-    const counts = OPS.map((_, op) => clients.filter((c) => c.op === op).length)
-    // duração média de atendimento de cada operação nesta fila, da mais demorada para a mais rápida
-    const durations = OPS.map((op, i) => {
+    const ops = OPS.map((op, i) => {
       const mine = clients.filter((c) => c.op === i)
       const avgMs = mine.length ? mine.reduce((sum, c) => sum + c.durationUs, 0) / mine.length / 1000 : 0
-      return { op, count: mine.length, avgMs, totalMs: avgMs * mine.length }
+      return { op, count: mine.length, avgMs }
     })
-      .filter((d) => d.count > 0)
-      .sort((a, b) => b.avgMs - a.avgMs)
-    // quanto trabalho chega por unidade de tempo, comparado ao que os caixas conseguem atender
+    const slowest = ops.filter((o) => o.count > 0).reduce((a, b) => (b.avgMs > a.avgMs ? b : a), ops[0])
     const pressure = spanUs > 0 ? workUs / config.tellers / spanUs : Infinity
-    return { preferential, workUs, spanUs, counts, durations, pressure }
+    return { preferential, spanUs, ops, slowest, pressure }
   }, [clients, config])
 
-  const transfers = useMemo(() => {
-    const matrix = Array.from({ length: config.accounts }, () => new Array<number>(config.accounts).fill(0))
-    for (const client of clients) if (client.op === OP_TRANSFER) matrix[client.from][client.to]++
-    let crossed = 0
-    for (let a = 0; a < config.accounts; a++) for (let b = a + 1; b < config.accounts; b++) if (matrix[a][b] > 0 && matrix[b][a] > 0) crossed++
-    return { matrix, crossed, max: Math.max(1, ...matrix.flat()), total: matrix.flat().reduce((a, b) => a + b, 0) }
-  }, [clients, config.accounts])
-
-  const ramp = PALETTE.sequential
   const pressureText =
     stats.pressure > 1.15
-      ? 'chega mais trabalho do que os caixas atendem: a fila acumula'
+      ? 'chega mais trabalho do que os caixas atendem, então a fila vai crescer'
       : stats.pressure > 0.85
         ? 'chegadas e atendimento quase empatados'
-        : 'os caixas dão conta: a fila fica curta'
+        : 'os caixas dão conta e a fila fica curta'
+  const common = clients.length - stats.preferential
 
   return (
     <div className="queue-page">
-      <section className="panel">
-        <header className="panel-header">
-          <h2>Fila do cenário</h2>
-          <span className="muted">
-            {scenarioName} · seed {config.seed} · <code>{scenarioId(config)}</code>
+      <section className="hero">
+        <div className="hero-title">
+          <span className="hero-kicker">Fila do cenário</span>
+          <h2>{scenarioName}</h2>
+          <span className="hero-meta">
+            seed {config.seed} · <code>{scenarioId(config)}</code> · a mesma seed gera sempre esta fila
           </span>
-          <span className="spacer" />
-          <button type="button" className="btn btn-primary" onClick={onGoToSimulation}>
-            Simular este cenário →
-          </button>
-        </header>
-        <p className="muted small">
-          Esta é a fila que será usada em todas as execuções deste cenário. A mesma seed gera sempre exatamente estes
-          clientes, nesta ordem de chegada. Mude a configuração à esquerda e a fila se atualiza na hora.
-        </p>
-        <dl className="metric-grid tiles">
-          <div className="metric">
-            <dt>Clientes</dt>
-            <dd>{clients.length}</dd>
+        </div>
+        <div className="hero-kpis">
+          <div>
+            <strong>{clients.length}</strong>
+            <span>clientes</span>
           </div>
-          <div className="metric">
-            <dt>Preferenciais</dt>
-            <dd>
-              ★ {stats.preferential} <small>({formatNumber((stats.preferential / clients.length) * 100, 0)}%)</small>
-            </dd>
+          <div>
+            <strong>{stats.preferential}</strong>
+            <span>preferenciais</span>
           </div>
-          <div className="metric">
-            <dt>Última chegada em</dt>
-            <dd>{formatMs(stats.spanUs / 1000)}</dd>
+          <div>
+            <strong>{formatMs(stats.spanUs / 1000)}</strong>
+            <span>até o último chegar</span>
           </div>
-          <div className="metric">
-            <dt>Trabalho total</dt>
-            <dd>
-              {formatMs(stats.workUs / 1000)} <small>÷ {config.tellers} caixas</small>
-            </dd>
+          <div>
+            <strong>{Number.isFinite(stats.pressure) ? `${formatNumber(stats.pressure)}x` : '-'}</strong>
+            <span>pressão sobre os caixas</span>
           </div>
-          <div className="metric metric-wide">
-            <dt>Pressão sobre os caixas</dt>
-            <dd>
-              {Number.isFinite(stats.pressure) ? `${formatNumber(stats.pressure)}×` : '—'} <small>{pressureText}</small>
-            </dd>
-          </div>
-        </dl>
+        </div>
+        <button type="button" className="btn hero-btn" onClick={onGoToSimulation}>
+          Simular este cenário <Icon name="arrow-right" size={16} />
+        </button>
       </section>
 
       <section className="panel">
         <header className="panel-header">
-          <h2>Chegadas ao longo do tempo</h2>
-          <span className="muted">cada chip é um cliente, posicionado no instante em que chega</span>
+          <h2>
+            <Icon name="users" size={18} /> Chegando na agência
+          </h2>
+          <span className="muted">cada pessoa aparece no instante em que chega; a cor da roupa é a operação</span>
         </header>
-        <ArrivalTimeline clients={clients} />
+        <ArrivalStreet clients={clients} />
         <div className="legend">
-          {OPS.map((op, i) => (
-            <span key={op.key} className={`op-${op.key}`}>
-              <i className="dot" /> {op.icon} {op.label} <strong>{stats.counts[i]}</strong>
+          {OPS.map((op) => (
+            <span key={op.key}>
+              <OpIcon op={op.key} size={18} /> {op.label}
             </span>
           ))}
           <span>
-            <span className="mini-chip mini-chip-pref legend-chip">★</span> preferencial
+            <Icon name="star" size={14} className="star" /> preferencial
           </span>
         </div>
       </section>
@@ -189,179 +208,66 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
       <div className="queue-split">
         <section className="panel">
           <header className="panel-header">
-            <h2>Composição</h2>
+            <h2>
+              <Icon name="gauge" size={18} /> Ritmo de chegada
+            </h2>
           </header>
-          <h3>Tipos de operação</h3>
-          <div className="stack-bar" role="img" aria-label="Proporção de cada tipo de operação">
-            {OPS.map((op, i) =>
-              stats.counts[i] > 0 ? (
-                <span key={op.key} className={`op-${op.key}`} style={{ flexGrow: stats.counts[i] }} title={`${op.label}: ${stats.counts[i]}`}>
-                  {op.icon} {stats.counts[i]}
-                </span>
-              ) : null,
-            )}
-          </div>
-          <h3>Duração média por operação</h3>
-          <div className="duration-bars">
-            {stats.durations.map((d, i) => (
-              <div key={d.op.key} className={`duration-row op-${d.op.key}`} title={`${d.count} na fila · ${formatMs(d.totalMs)} de atendimento somado`}>
-                <span className="duration-label">
-                  {d.op.icon} {d.op.label}
-                </span>
-                <span className="duration-track">
-                  <span className="duration-fill" style={{ width: `${(d.avgMs / stats.durations[0].avgMs) * 100}%` }} />
-                </span>
-                <span className="duration-value">
-                  <strong>{formatMs(d.avgMs)}</strong>
-                  {i === 0 && stats.durations.length > 1 && <span className="tag">mais demorada</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="muted small">
-            Tempo de atendimento antes da janela crítica de {config.criticalWindowMs} ms. É este valor que o SJF usa para
-            escolher o próximo cliente.
-          </p>
-          <h3>Prioridade</h3>
-          <div className="stack-bar" role="img" aria-label="Proporção de preferenciais e comuns">
-            {stats.preferential > 0 && (
-              <span className="bar-pref" style={{ flexGrow: stats.preferential }}>
-                ★ {stats.preferential} preferenciais
-              </span>
-            )}
-            {clients.length - stats.preferential > 0 && (
-              <span className="bar-common" style={{ flexGrow: clients.length - stats.preferential }}>
-                {clients.length - stats.preferential} comuns
-              </span>
-            )}
-          </div>
+          <p className="muted small rhythm-caption">Pressão de {Number.isFinite(stats.pressure) ? `${formatNumber(stats.pressure)}x` : '-'}: {pressureText}.</p>
+          <ArrivalRhythm clients={clients} config={config} />
         </section>
 
         <section className="panel">
           <header className="panel-header">
-            <h2>Transferências entre contas</h2>
-            <span className="muted">{transfers.total} no total</span>
+            <h2>
+              <Icon name="star" size={18} className="star" /> Prioridade
+            </h2>
           </header>
-          {transfers.total === 0 ? (
-            <p className="empty">Este cenário não tem transferências.</p>
-          ) : (
-            <>
-              <div className="table-scroll">
-                <table className="heatmap transfer-matrix">
-                  <thead>
-                    <tr>
-                      <th>origem ↓ destino →</th>
-                      {transfers.matrix.map((_, b) => (
-                        <th key={b}>{accountName(b)}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transfers.matrix.map((row, a) => (
-                      <tr key={a}>
-                        <th>{accountName(a)}</th>
-                        {row.map((count, b) => {
-                          if (a === b) return <td key={b} className="heat-empty" />
-                          if (count === 0) return <td key={b} className="heat-empty">0</td>
-                          const step = Math.min(ramp.length - 1, Math.floor((count / transfers.max) * (ramp.length - 1)))
-                          const crossed = transfers.matrix[b][a] > 0
-                          return (
-                            <td key={b} style={{ background: ramp[step], color: sequentialInk(step) }} title={`${count} transferências de ${accountName(a)} para ${accountName(b)}`}>
-                              <strong>
-                                {count}
-                                {crossed ? ' ⇄' : ''}
-                              </strong>
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="muted small">
-                {transfers.crossed > 0
-                  ? `⇄ ${transfers.crossed} par${transfers.crossed === 1 ? '' : 'es'} de contas com transferências nos dois sentidos: é aí que o lock por cofre sem ordenação pode entrar em deadlock.`
-                  : 'Nenhum par de contas tem transferências nos dois sentidos, então não há como formar o ciclo de espera clássico.'}
-              </p>
-            </>
-          )}
+          <div className="priority-split">
+            <div className="priority-side">
+              <Person mood="happy" color="#ec0000" preferential size={56} />
+              <strong>{stats.preferential}</strong>
+              <span className="muted small">preferenciais</span>
+            </div>
+            <div className="priority-bar" role="img" aria-label={`${stats.preferential} preferenciais e ${common} comuns`}>
+              <span className="priority-pref" style={{ flexGrow: Math.max(stats.preferential, 0.001) }} />
+              <span className="priority-common" style={{ flexGrow: Math.max(common, 0.001) }} />
+            </div>
+            <div className="priority-side">
+              <Person mood="happy" color="#8a8a8a" size={56} />
+              <strong>{common}</strong>
+              <span className="muted small">comuns</span>
+            </div>
+          </div>
+          <p className="muted small">
+            Na Prioridade pura, os comuns só são chamados quando não há preferencial esperando. Com aging, quem espera muito
+            sobe de prioridade.
+          </p>
         </section>
       </div>
 
       <section className="panel">
         <header className="panel-header">
-          <h2>Todos os clientes</h2>
-          <span className="muted">em ordem de chegada</span>
-          <span className="spacer" />
-          <div className="segmented">
-            <button type="button" className={asTable ? 'seg' : 'seg seg-active'} onClick={() => setAsTable(false)}>
-              Cartões
-            </button>
-            <button type="button" className={asTable ? 'seg seg-active' : 'seg'} onClick={() => setAsTable(true)}>
-              Tabela
-            </button>
-          </div>
+          <h2>O que cada cliente veio fazer</h2>
+          <span className="muted">tempo médio de atendimento, sem contar a janela crítica de {config.criticalWindowMs} ms</span>
         </header>
-        {asTable ? (
-          <div className="table-scroll queue-table-full">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Chegada</th>
-                  <th>Prioridade</th>
-                  <th>Operação</th>
-                  <th>Contas</th>
-                  <th className="num">Valor</th>
-                  <th className="num">Duração</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clients.map((client) => (
-                  <tr key={client.id}>
-                    <td>{client.id}</td>
-                    <td>{formatMs(client.arrivalUs / 1000)}</td>
-                    <td>{client.priority === 1 ? '★ Preferencial' : 'Comum'}</td>
-                    <td>
-                      <span className={`dot op-${OPS[client.op].key}`} /> {OPS[client.op].label}
-                    </td>
-                    <td>
-                      {accountName(client.from)}
-                      {client.to >= 0 ? ` → ${accountName(client.to)}` : ''}
-                    </td>
-                    <td className="num">{formatMoney(client.amount)}</td>
-                    <td className="num">{formatMs(client.durationUs / 1000)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="queue">
-            {clients.map((client) => {
-              const op = OPS[client.op]
-              return (
-                <div key={client.id} className={`queue-card op-${op.key}`}>
-                  <div className="queue-card-top">
-                    <span className="queue-id">#{client.id}</span>
-                    {client.priority === 1 && <span className="badge-pref-full">★ Pref.</span>}
-                  </div>
-                  <div className="queue-op">
-                    <span aria-hidden>{op.icon}</span> {op.label}
-                  </div>
-                  <div className="muted small">
-                    {formatMoney(client.amount)} · {accountName(client.from)}
-                    {client.to >= 0 ? ` → ${accountName(client.to)}` : ''}
-                  </div>
-                  <div className="queue-wait">
-                    chega {formatMs(client.arrivalUs / 1000)} · dura {formatMs(client.durationUs / 1000)}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <div className="op-tiles">
+          {stats.ops.map(({ op, count, avgMs }) => (
+            <div key={op.key} className={`op-tile op-${op.key} ${count === 0 ? 'op-tile-empty' : ''}`}>
+              <div className="op-tile-head">
+                <OpIcon op={op.key} size={36} />
+                {op === stats.slowest.op && count > 0 && <span className="tag-brand">mais demorada</span>}
+              </div>
+              <span className="op-tile-name">{op.label}</span>
+              <strong className="op-tile-count">{count}</strong>
+              <div className="op-tile-share">
+                <span style={{ width: `${(count / Math.max(1, clients.length)) * 100}%` }} />
+              </div>
+              <span className="muted small">
+                {formatNumber((count / Math.max(1, clients.length)) * 100, 0)}% da fila · {count ? formatMs(avgMs) : '-'} cada
+              </span>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   )

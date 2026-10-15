@@ -1,11 +1,12 @@
+import { Icon } from './icons'
 import { STATUS_LABEL, formatMoney, type RunRecord } from '../sim/types'
 import { formatMs, formatNumber } from './theme'
 
 export function StatusBadge({ status }: { status: RunRecord['status'] }) {
-  const icon = status === 'completed' ? '✓' : status === 'deadlock' ? '☠' : '■'
+  const icon = status === 'completed' ? 'check' : status === 'deadlock' ? 'skull' : 'stop'
   return (
     <span className={`status status-${status}`}>
-      {icon} {STATUS_LABEL[status]}
+      <Icon name={icon} /> {STATUS_LABEL[status]}
     </span>
   )
 }
@@ -16,57 +17,58 @@ export function LittlePanel({ run, compact }: { run: RunRecord; compact?: boolea
   if (m.rho === undefined || m.littleL === undefined || m.littleLq === undefined || m.arrivalRate === undefined || m.serviceAvgMs === undefined) return null
   const stable = m.rho < 1
   const tellers = run.config.tellers
+  // régua de 0 a 2: até 1 os caixas dão conta
+  const marker = Math.min(100, (m.rho / 2) * 100)
   return (
     <div className={`little ${stable ? 'little-ok' : 'little-over'}`}>
-      <div className="little-verdict">
-        <span className="little-icon" aria-hidden>
-          {stable ? '✅' : '⚠️'}
+      <div className="little-head">
+        <span className="little-badge">
+          <Icon name={stable ? 'check' : 'alert'} size={18} />
         </span>
         <div>
-          <strong>
-            ρ = {formatNumber(m.rho, 2)} {stable ? '< 1: dá para atender tudo' : '≥ 1: não dá para atender no ritmo das chegadas'}
-          </strong>
-          <span className="small">
+          <strong>{stable ? 'Os caixas dão conta das chegadas' : 'Os caixas não dão conta das chegadas'}</strong>
+          <span className="small muted">
             {stable
-              ? `Os ${tellers} caixas dão conta: usam em média ${formatNumber(m.rho * 100, 0)}% da capacidade.`
-              : `Chega ${formatNumber(m.rho, 1)}× mais trabalho do que ${tellers} caixas atendem. A fila cresce enquanto houver chegadas; seriam precisos pelo menos ${Math.floor(m.rho * tellers) + 1} caixas.`}
+              ? `Cada caixa fica ocupado ${formatNumber(m.rho * 100, 0)}% do tempo enquanto chegam clientes.`
+              : `Chega ${formatNumber(m.rho, 1)} vezes o que ${tellers} caixas atendem. Seriam precisos ${Math.floor(m.rho * tellers) + 1} caixas.`}
           </span>
         </div>
       </div>
-      <dl className="little-formulas">
+      <div className="rho-meter" aria-label={`ρ = ${formatNumber(m.rho, 2)}`}>
+        <span className="rho-marker" style={{ left: `${marker}%` }} />
+        <span className="rho-tick">1</span>
+      </div>
+      <div className="little-kpis">
         <div>
-          <dt>Carga por caixa</dt>
-          <dd>
-            ρ = λ·S ÷ c = {formatNumber(m.arrivalRate)}/s × {formatMs(m.serviceAvgMs)} ÷ {tellers} = <strong>{formatNumber(m.rho, 2)}</strong>
-          </dd>
+          <span>ρ</span>
+          <strong>{formatNumber(m.rho, 2)}</strong>
+          <small>carga por caixa</small>
         </div>
         <div>
-          <dt>Little: clientes na agência</dt>
-          <dd>
-            L = λ·W = {formatNumber(m.throughput)}/s × {formatMs(m.turnaroundAvgMs)} = <strong>{formatNumber(m.littleL, 2)}</strong>
-          </dd>
+          <span>L</span>
+          <strong>{formatNumber(m.littleL, 1)}</strong>
+          <small>clientes na agência, em média</small>
         </div>
         <div>
-          <dt>Little: clientes na fila</dt>
-          <dd>
-            Lq = λ·Wq = {formatNumber(m.throughput)}/s × {formatMs(m.waitAvgMs)} = <strong>{formatNumber(m.littleLq, 2)}</strong>
-          </dd>
+          <span>Lq</span>
+          <strong>{formatNumber(m.littleLq, 1)}</strong>
+          <small>clientes na fila, em média</small>
         </div>
-        {!compact && (
-          <div>
-            <dt>Caixas ocupados em média</dt>
-            <dd>
-              L − Lq = <strong>{formatNumber(m.littleL - m.littleLq, 2)}</strong> de {tellers}
-            </dd>
-          </div>
-        )}
-      </dl>
+      </div>
       {!compact && (
-        <p className="muted small">
-          Em ρ, λ é a taxa de chegada ({formatNumber(m.arrivalRate)} clientes/s na janela de chegadas) e S o atendimento médio
-          medido. No Teorema de Little, λ é a vazão efetiva da execução inteira e W o tempo médio na agência (turnaround).
-          {run.status !== 'completed' && ' A execução não terminou, então os valores são parciais.'}
-        </p>
+        <details className="little-math">
+          <summary className="small">Ver as contas</summary>
+          <ul className="small">
+            <li>ρ = λ × S ÷ c = {formatNumber(m.arrivalRate)}/s × {formatMs(m.serviceAvgMs)} ÷ {tellers}</li>
+            <li>L = λ × W = {formatNumber(m.throughput)}/s × {formatMs(m.turnaroundAvgMs)}</li>
+            <li>Lq = λ × Wq = {formatNumber(m.throughput)}/s × {formatMs(m.waitAvgMs)}</li>
+            <li className="muted">
+              No ρ, λ é a taxa de chegada e S o atendimento médio. No Teorema de Little, λ é a vazão da execução, W o
+              tempo na agência e Wq a espera na fila.
+              {run.status !== 'completed' && ' A execução não terminou, então os valores são parciais.'}
+            </li>
+          </ul>
+        </details>
       )}
     </div>
   )

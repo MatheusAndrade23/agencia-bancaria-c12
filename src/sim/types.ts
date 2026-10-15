@@ -11,17 +11,16 @@ export interface OpInfo {
   key: 'deposit' | 'withdraw' | 'transfer' | 'bill' | 'loan'
   label: string
   short: string
-  icon: string
   /** duração base do atendimento, em ms (antes da escala e do jitter) */
   baseMs: number
 }
 
 export const OPS: OpInfo[] = [
-  { key: 'deposit', label: 'Depósito', short: 'DEP', icon: '💵', baseMs: 60 },
-  { key: 'withdraw', label: 'Saque', short: 'SAQ', icon: '🏧', baseMs: 60 },
-  { key: 'transfer', label: 'Transferência', short: 'TRF', icon: '🔁', baseMs: 120 },
-  { key: 'bill', label: 'Boleto', short: 'BOL', icon: '🧾', baseMs: 120 },
-  { key: 'loan', label: 'Financiamento', short: 'FIN', icon: '🏠', baseMs: 300 },
+  { key: 'deposit', label: 'Depósito', short: 'DEP', baseMs: 60 },
+  { key: 'withdraw', label: 'Saque', short: 'SAQ', baseMs: 60 },
+  { key: 'transfer', label: 'Transferência', short: 'TRF', baseMs: 120 },
+  { key: 'bill', label: 'Boleto', short: 'BOL', baseMs: 120 },
+  { key: 'loan', label: 'Financiamento', short: 'FIN', baseMs: 300 },
 ]
 
 export type Algorithm = 'fcfs' | 'sjf' | 'priority' | 'aging'
