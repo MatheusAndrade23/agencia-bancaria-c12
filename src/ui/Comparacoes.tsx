@@ -10,7 +10,7 @@ import {
 import { ComparisonCharts } from './ComparisonCharts'
 import { cycleText } from './DeadlockPanel'
 import { Gantt } from './Gantt'
-import { MetricsSummary, StatusBadge } from './MetricsSummary'
+import { MetricsSummary, StatusBadge, formatReputation } from './MetricsSummary'
 import { formatMs, formatNumber, usePalette } from './theme'
 
 interface Props {
@@ -28,10 +28,12 @@ interface MetricOption {
 }
 
 const METRIC_OPTIONS: MetricOption[] = [
+  { key: 'reputation', label: 'Reputação da empresa (−100 a +100)', value: (m) => m.reputation, format: (v) => formatReputation(v) },
   { key: 'satisfaction', label: 'Índice de satisfação (0 a 100)', value: (m) => m.satisfaction, format: (v) => formatNumber(v, 1) },
   { key: 'satisfactionCommon', label: 'Satisfação dos comuns', value: (m) => m.satisfactionCommon, format: (v) => formatNumber(v, 1) },
   { key: 'satisfactionPref', label: 'Satisfação dos preferenciais', value: (m) => m.satisfactionPref, format: (v) => formatNumber(v, 1) },
   { key: 'gaveUp', label: 'Desistências', value: (m) => m.gaveUp, format: (v) => formatNumber(v, 1) },
+  { key: 'disturbed', label: 'Clientes incomodados por incidentes', value: (m) => m.disturbed, format: (v) => formatNumber(v, 1) },
   { key: 'events', label: 'Idosos que passaram mal + crianças no chão', value: (m) => (m.elderlySick === undefined ? undefined : m.elderlySick + (m.infantFloor ?? 0)), format: (v) => formatNumber(v, 1) },
   { key: 'mood', label: 'Humor médio (0 feliz a 4 furioso)', value: (m) => m.moodAvg, format: (v) => formatNumber(v, 2) },
   { key: 'waitAvg', label: 'Espera média na fila', value: (m) => m.waitAvgMs, format: formatMs },
@@ -48,7 +50,7 @@ const METRIC_OPTIONS: MetricOption[] = [
   { key: 'money', label: 'Dinheiro inconsistente (módulo)', value: (m) => Math.abs(m.inconsistentCents), format: (v) => formatMoney(Math.round(v)) },
 ]
 
-type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'satisfaction' | 'gaveUp' | 'events' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
+type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'reputation' | 'satisfaction' | 'gaveUp' | 'events' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunRecord): number | string; render(run: RunRecord): React.ReactNode }[] = [
   { key: 'date', label: 'Data', value: (r) => r.createdAt, render: (r) => new Date(r.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) },
@@ -56,6 +58,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunR
   { key: 'algorithm', label: 'Algoritmo', value: (r) => ALGORITHMS.indexOf(r.algorithm), render: (r) => ALGORITHM_LABEL[r.algorithm] },
   { key: 'lock', label: 'Sincronismo', value: (r) => LOCK_MODES.indexOf(r.lockMode), render: (r) => LOCK_MODE_LABEL[r.lockMode] },
   { key: 'status', label: 'Status', value: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
+  { key: 'reputation', label: 'Reputação', numeric: true, value: (r) => r.metrics.reputation ?? -1000, render: (r) => (r.metrics.reputation === undefined ? '-' : <span className={r.metrics.reputation < -10 ? 'bad' : ''}>{formatReputation(r.metrics.reputation)}</span>) },
   { key: 'satisfaction', label: 'Satisfação', numeric: true, value: (r) => r.metrics.satisfaction ?? -1, render: (r) => (r.metrics.satisfaction === undefined ? '-' : <span title={`mediana ${formatNumber(r.metrics.satisfactionMedian ?? 0, 1)} · P10 ${formatNumber(r.metrics.satisfactionP10 ?? 0, 1)}`}>{formatNumber(r.metrics.satisfaction, 1)}</span>) },
   { key: 'gaveUp', label: 'Desistências', numeric: true, value: (r) => r.metrics.gaveUp ?? -1, render: (r) => (r.metrics.gaveUp === undefined ? '-' : <span className={r.metrics.gaveUp ? 'bad' : ''}>{r.metrics.gaveUp}</span>) },
   { key: 'events', label: 'Passou mal / chão', numeric: true, value: (r) => (r.metrics.elderlySick ?? -1) + (r.metrics.infantFloor ?? 0), render: (r) => (r.metrics.elderlySick === undefined ? '-' : `${r.metrics.elderlySick} / ${r.metrics.infantFloor ?? 0}`) },
@@ -262,6 +265,7 @@ export function Comparacoes({ runs, onDelete, onClearAll }: Props) {
         </section>
       ) : (
         <>
+          <Ranking runs={scenarioRuns} />
           <Heatmap runs={scenarioRuns} metricKey={metricKey} onMetricChange={setMetricKey} />
           <ComparisonCharts runs={scenarioRuns} />
         </>
@@ -400,6 +404,128 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
         Cada célula mostra a média ± desvio padrão das execuções <em>concluídas</em> daquela combinação. Células em
         vermelho travaram em deadlock em todas as tentativas.
       </p>
+    </section>
+  )
+}
+
+interface RankingRow {
+  algorithm: Algorithm
+  lockMode: LockMode
+  total: number
+  deadlocks: number
+  n: number
+  reputation: number
+  satisfaction: number
+  common: number
+  gaveUp: number
+  incidents: number
+  makespanMs: number
+  wrongMoney: boolean
+}
+
+/**
+ * Ranking das combinações do cenário: a que deixa a empresa com melhor reputação vem primeiro,
+ * com a satisfação desempatando. Combinações que travaram em deadlock em todas as tentativas vão para o fim.
+ */
+function Ranking({ runs }: { runs: RunRecord[] }) {
+  const rows: RankingRow[] = []
+  for (const algorithm of ALGORITHMS) {
+    for (const lockMode of LOCK_MODES) {
+      const all = runs.filter((run) => run.algorithm === algorithm && run.lockMode === lockMode)
+      if (all.length === 0) continue
+      const measured = all.filter((run) => run.status === 'completed' && run.metrics.reputation !== undefined)
+      const avg = (value: (m: Metrics) => number | undefined) => meanAndSd(measured.map((run) => value(run.metrics) ?? 0)).mean
+      rows.push({
+        algorithm,
+        lockMode,
+        total: all.length,
+        deadlocks: all.filter((run) => run.status === 'deadlock').length,
+        n: measured.length,
+        reputation: avg((m) => m.reputation),
+        satisfaction: avg((m) => m.satisfaction),
+        common: avg((m) => m.satisfactionCommon),
+        gaveUp: avg((m) => m.gaveUp),
+        incidents: avg((m) => (m.elderlySick ?? 0) + (m.infantFloor ?? 0)),
+        makespanMs: avg((m) => m.makespanMs),
+        wrongMoney: measured.some((run) => run.metrics.wrongAccounts > 0),
+      })
+    }
+  }
+  rows.sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || b.reputation - a.reputation || b.satisfaction - a.satisfaction)
+  const best = rows.find((row) => row.n > 0)
+
+  return (
+    <section className="panel">
+      <header className="panel-header">
+        <h2>Qual combinação escolher</h2>
+        <span className="muted">ordenado pela reputação da empresa; a satisfação desempata</span>
+      </header>
+      {!best ? (
+        <p className="empty">Rode o cenário com a versão atual para medir satisfação e reputação (execuções antigas não têm essas métricas).</p>
+      ) : (
+        <>
+          <p className="ranking-best">
+            <Icon name="check" size={16} /> Melhor neste cenário: <strong>{ALGORITHM_LABEL[best.algorithm]} × {LOCK_MODE_LABEL[best.lockMode]}</strong>, com reputação{' '}
+            {formatReputation(best.reputation)} e satisfação {formatNumber(best.satisfaction, 1)}
+            {best.n > 1 ? ` (média de ${best.n} execuções)` : ''}.
+          </p>
+          <div className="table-scroll">
+            <table className="ranking">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Combinação</th>
+                  <th className="num">Reputação</th>
+                  <th className="num">Satisfação</th>
+                  <th className="num">Comuns</th>
+                  <th className="num">Desistências</th>
+                  <th className="num">Incidentes</th>
+                  <th className="num">Makespan</th>
+                  <th className="num">Execuções</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={`${row.algorithm}-${row.lockMode}`} className={row === best ? 'row-selected' : ''}>
+                    <td>{row.n > 0 ? i + 1 : '-'}</td>
+                    <td>
+                      {ALGORITHM_LABEL[row.algorithm]} × {LOCK_MODE_LABEL[row.lockMode]}
+                      {row.wrongMoney && <span className="bad small"> · dinheiro errado</span>}
+                      {row.deadlocks > 0 && (
+                        <span className="bad small">
+                          {' '}
+                          · <Icon name="skull" size={12} /> {row.deadlocks} em deadlock
+                        </span>
+                      )}
+                    </td>
+                    {row.n > 0 ? (
+                      <>
+                        <td className="num">
+                          <strong>{formatReputation(row.reputation)}</strong>
+                        </td>
+                        <td className="num">{formatNumber(row.satisfaction, 1)}</td>
+                        <td className="num">{formatNumber(row.common, 1)}</td>
+                        <td className="num">{formatNumber(row.gaveUp, 1)}</td>
+                        <td className="num">{formatNumber(row.incidents, 1)}</td>
+                        <td className="num">{formatMs(row.makespanMs)}</td>
+                      </>
+                    ) : (
+                      <td colSpan={6} className="muted small">
+                        sem execução concluída com as métricas novas
+                      </td>
+                    )}
+                    <td className="num">{row.n}/{row.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted small">
+            Os valores são médias das execuções concluídas de cada combinação. Rode as 16 combinações algumas vezes para a média
+            ficar estável: os tempos variam um pouco de uma execução para outra e a inconsistência do sem lock varia muito.
+          </p>
+        </>
+      )}
     </section>
   )
 }

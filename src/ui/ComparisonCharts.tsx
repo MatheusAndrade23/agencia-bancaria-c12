@@ -225,10 +225,20 @@ export function ComparisonCharts({ runs }: { runs: RunRecord[] }) {
           format={count}
         />
         <ChartCard
-          title="Satisfação por modo de sincronismo"
-          subtitle="dinheiro errado na conta corta a nota do cliente pela metade"
+          title="Satisfação e reputação por modo de sincronismo"
+          subtitle="dinheiro errado corta a nota do cliente pela metade e tira 20 pontos da reputação"
           labels={lockLabels}
-          series={[{ label: 'Índice de satisfação', stats: byLock((m) => m.satisfaction) }]}
+          series={[
+            { label: 'Satisfação', stats: byLock((m) => m.satisfaction) },
+            { label: 'Reputação', stats: byLock((m) => m.reputation) },
+          ]}
+          format={points}
+        />
+        <ChartCard
+          title="Reputação da empresa por algoritmo"
+          subtitle="promotores menos detratores, menos os incidentes públicos (de −100 a +100)"
+          labels={algorithmLabels}
+          series={[{ label: 'Reputação', stats: byAlgorithm((m) => m.reputation) }]}
           format={points}
         />
       </div>

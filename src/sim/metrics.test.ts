@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeMetrics, meanAndSd } from './metrics'
 import { DEFAULT_CONFIG } from './queue'
-import { clientScore, moodLevel, percentile, timeScore, type ScoreInput } from './satisfaction'
+import { clientScore, contagionFactor, moodLevel, percentile, reputation, timeScore, type ScoreInput } from './satisfaction'
 import { closeQueue, packTimeline, unpackTimeline, viewAt } from './timeline'
 import type { Client, ClientTrace, ScenarioConfig, Timeline } from './types'
 
@@ -158,10 +158,36 @@ describe('satisfação', () => {
     expect(m.gaveUpPref).toBe(1)
     expect(m.elderlySick).toBe(1)
     expect(m.served).toBe(1)
-    // o comum esperou 30 ms de 50: (50 − 30) / 37,5
-    expect(m.satisfactionCommon).toBeCloseTo((20 / 37.5) * 100)
-    expect(m.satisfaction).toBeCloseTo(((20 / 37.5) * 100) / 2)
+    // o comum esperou 30 ms de 50: (50 − 30) / 37,5; e estava na agência quando o idoso passou mal: × 0,8
+    expect(m.disturbed).toBe(1)
+    expect(m.satisfactionCommon).toBeCloseTo((20 / 37.5) * 0.8 * 100)
+    expect(m.satisfaction).toBeCloseTo(((20 / 37.5) * 0.8 * 100) / 2)
+    // 1 detrator em 1 cliente com nota (o desistente também é detrator) e 1 idoso que passou mal
+    expect(m.detractors).toBe(2)
+    expect(m.reputation).toBe(-100) // −100 − 10, limitado a −100
     expect(viewAt(patienceConfig, clients, waiting, 60_000, undefined, 0).gaveUp).toBe(1)
+  })
+
+  it('incômodo coletivo: quem vê o idoso passar mal ou a criança no chão perde parte da nota', () => {
+    expect(contagionFactor(0, 0)).toBe(1)
+    expect(contagionFactor(1, 0)).toBeCloseTo(0.8)
+    expect(contagionFactor(1, 1)).toBeCloseTo(0.72)
+    expect(contagionFactor(5, 5)).toBe(0.5) // piso: nunca tira mais que metade
+    // exemplo aprovado: os clientes 3 e 10 viram os dois incidentes
+    expect(score(350, { sawSick: 1, sawFloor: 1 })).toBeCloseTo(0.288)
+    expect(score(400, { sawSick: 1, sawFloor: 1 })).toBeCloseTo(0.192)
+    const scores = [1, 0.8, 0.288, 0, 0, 0.6, 0.8, 0.4667, 1, 0.192]
+    expect((scores.reduce((a, b) => a + b, 0) / scores.length) * 100).toBeCloseTo(51.5, 1)
+  })
+
+  it('reputação: promotores menos detratores, menos os incidentes públicos', () => {
+    const scores = [1, 0.8, 0.288, 0, 0, 0.6, 0.8, 0.4667, 1, 0.192]
+    const r = reputation(scores, 1, true)
+    expect([r.promoters, r.neutrals, r.detractors]).toEqual([4, 1, 5])
+    expect(r.base).toBeCloseTo(-10)
+    expect(r.value).toBeCloseTo(-40) // −10 − 10 (idoso) − 20 (conta errada)
+    expect(reputation([1, 1, 1], 0, false).value).toBe(100)
+    expect(reputation([0, 0], 12, true).value).toBe(-100)
   })
 
   it('conta movimentada com saldo errado derruba a nota pela metade', () => {
@@ -169,5 +195,8 @@ describe('satisfação', () => {
     expect(ok.satisfaction).toBe(100)
     const wrong = computeMetrics(config, clients, { ...timeline, balances: [800, 1200] })
     expect(wrong.satisfaction).toBe(50)
+    // reputação: todos promotores sem incidentes; com dinheiro errado, todos neutros e −20 de escândalo
+    expect(ok.reputation).toBe(100)
+    expect(wrong.reputation).toBe(-20)
   })
 })

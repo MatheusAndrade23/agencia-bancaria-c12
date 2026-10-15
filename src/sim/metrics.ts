@@ -69,7 +69,7 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
 
   // satisfação: desfecho de cada cliente até o fim, com as contas que terminaram erradas
   const wrong = expected.map((value, a) => value !== timeline.balances[a])
-  const s = summarize(clients, outcomesAt(config, clients, timeline, makespanUs, wrong))
+  const s = summarize(clients, outcomesAt(config, clients, timeline, makespanUs, wrong), wrong.some(Boolean))
 
   return {
     makespanMs: makespanUs / 1000,
@@ -110,6 +110,11 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
     satisfactionP10: s.satisfactionP10,
     satisfactionPref: s.satisfactionPref ?? undefined,
     satisfactionCommon: s.satisfactionCommon ?? undefined,
+    disturbed: s.disturbed,
+    reputation: s.reputation.value,
+    promoters: s.reputation.promoters,
+    neutrals: s.reputation.neutrals,
+    detractors: s.reputation.detractors,
   }
 }
 

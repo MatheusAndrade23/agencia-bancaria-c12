@@ -8,7 +8,7 @@ import {
 } from '../sim/types'
 import { cycleText } from './DeadlockPanel'
 import { Face, Icon, Person, Teller, moodFace, type Mood } from './icons'
-import { moodText, satisfactionTone } from './MetricsSummary'
+import { formatReputation, moodText, satisfactionTone } from './MetricsSummary'
 import { Saguao, stageLayout } from './Saguao'
 import { formatMs, formatNumber, usePalette } from './theme'
 
@@ -75,7 +75,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
   // índice de satisfação ao vivo: só quem já foi atendido ou desistiu até o instante t
   const live = useMemo(() => {
     const wrong = view.accounts.map((account) => account.balance !== account.expected)
-    return summarize(clients, outcomesAt(config, clients, timeline, tUs, wrong))
+    return summarize(clients, outcomesAt(config, clients, timeline, tUs, wrong), wrong.some(Boolean))
   }, [config, clients, timeline, tUs, view.accounts])
 
   const { w, h } = size
@@ -268,7 +268,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
                 <Face mood={moodFace(live.moodAvg)} size={16} /> humor médio {moodText(live.moodAvg)}
               </span>
               <span className="small">
-                <Icon name="door" size={13} /> {live.gaveUp} desistiram
+                <Icon name="door" size={13} /> {live.gaveUp} desistiram · reputação{' '}
+                <strong>{live.satisfaction === null ? '-' : formatReputation(live.reputation.value)}</strong>
               </span>
               <span className="small">
                 <Icon name="alert" size={13} /> {live.elderlySick} passaram mal · <Icon name="baby" size={13} /> {live.infantFloor} no chão

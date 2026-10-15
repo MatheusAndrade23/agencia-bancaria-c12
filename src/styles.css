@@ -495,6 +495,19 @@ th.num, td.num { text-align: right; }
 .satisfaction-moods > div { display: flex; flex-direction: column; gap: 2px; border-left: 3px solid var(--brand); padding-left: 10px; }
 .satisfaction-events { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; }
 .satisfaction-events span { display: inline-flex; align-items: center; gap: 4px; }
+.reputation { --tone: var(--good); grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: center; border-top: 1px solid var(--border); padding-top: 10px; }
+.reputation-warn { --tone: var(--warning); }
+.reputation-bad { --tone: var(--critical); }
+.reputation-head { display: flex; flex-direction: column; align-items: flex-start; border-left: 3px solid var(--tone); padding-left: 10px; }
+.reputation-head strong { font-size: 22px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--tone); }
+.reputation-split { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.reputation-bar { display: flex; gap: 2px; height: 10px; }
+.reputation-bar span { display: block; border-radius: 2px; flex-basis: 0; }
+.reputation-promoters { background: var(--good); }
+.reputation-neutrals { background: var(--neutral-soft); }
+.reputation-detractors { background: var(--critical); }
+.ranking-best { border: 1px solid var(--good); background: var(--good-bg); border-radius: 4px; padding: 8px 12px; margin: 0 0 10px; }
+.ranking td, .ranking th { white-space: nowrap; }
 .satisfaction-hud { min-width: 230px; }
 .satisfaction-hud.satisfaction-good { border-color: var(--good); background: var(--good-bg); }
 .satisfaction-hud.satisfaction-warn { border-color: var(--warning); background: var(--warning-bg); }
@@ -607,3 +620,4 @@ th.num, td.num { text-align: right; }
 .op-tile-share { height: 6px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin: 6px 0 2px; }
 .op-tile-share span { display: block; height: 100%; background: var(--op); }
 .tag-brand { font-size: 11px; font-weight: 700; color: #ffffff; background: var(--brand); border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+.ranking-best .icon { vertical-align: -3px; color: var(--good); }

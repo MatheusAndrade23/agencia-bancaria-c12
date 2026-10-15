@@ -1,5 +1,5 @@
 import { Face, Icon, moodFace } from './icons'
-import { MOOD_LABEL, type MoodLevel } from '../sim/satisfaction'
+import { MOOD_LABEL, REPUTATION_MONEY_PENALTY, REPUTATION_SICK_PENALTY, type MoodLevel } from '../sim/satisfaction'
 import { STATUS_LABEL, formatMoney, type RunRecord } from '../sim/types'
 import { formatMs, formatNumber } from './theme'
 
@@ -84,6 +84,52 @@ export function satisfactionTone(value: number): 'good' | 'warn' | 'bad' {
   return value >= 70 ? 'good' : value >= 40 ? 'warn' : 'bad'
 }
 
+export function formatReputation(value: number): string {
+  const text = formatNumber(Math.abs(value), 0)
+  return value > 0.5 ? `+${text}` : value < -0.5 ? `−${text}` : text
+}
+
+/** Reputação: verde a partir de +30, amarelo a partir de −10, vermelho abaixo. */
+export function reputationTone(value: number): 'good' | 'warn' | 'bad' {
+  return value >= 30 ? 'good' : value >= -10 ? 'warn' : 'bad'
+}
+
+/** Reputação da empresa: promotores, neutros e detratores, e o que os incidentes custaram. */
+function ReputationRow({ m }: { m: RunRecord['metrics'] }) {
+  if (m.reputation === undefined || m.promoters === undefined || m.neutrals === undefined || m.detractors === undefined) return null
+  const penalty = REPUTATION_SICK_PENALTY * (m.elderlySick ?? 0) + (m.wrongAccounts > 0 ? REPUTATION_MONEY_PENALTY : 0)
+  return (
+    <div className={`reputation reputation-${reputationTone(m.reputation)}`}>
+      <div className="reputation-head">
+        <span className="small muted">Reputação da empresa</span>
+        <strong>{formatReputation(m.reputation)}</strong>
+        <span className="small muted">de −100 a +100</span>
+      </div>
+      <div className="reputation-split">
+        <div className="reputation-bar" role="img" aria-label={`${m.promoters} promotores, ${m.neutrals} neutros e ${m.detractors} detratores`}>
+          <span className="reputation-promoters" style={{ flexGrow: Math.max(m.promoters, 0.001) }} />
+          <span className="reputation-neutrals" style={{ flexGrow: Math.max(m.neutrals, 0.001) }} />
+          <span className="reputation-detractors" style={{ flexGrow: Math.max(m.detractors, 0.001) }} />
+        </div>
+        <span className="small">
+          {m.promoters} promotores · {m.neutrals} neutros · {m.detractors} detratores
+          {penalty > 0 && (
+            <span className="bad">
+              {' '}
+              · incidentes: −{penalty}
+              {(m.elderlySick ?? 0) > 0 && ` (${m.elderlySick} idosos passaram mal)`}
+              {m.wrongAccounts > 0 && ' (dinheiro errado)'}
+            </span>
+          )}
+        </span>
+        {m.disturbed !== undefined && (
+          <span className="small muted">{m.disturbed} clientes viram alguém passar mal ou uma criança no chão</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /** Índice de satisfação, humor e o que aconteceu na fila (desistências e eventos). */
 export function SatisfactionPanel({ run }: { run: RunRecord }) {
   const m = run.metrics
@@ -135,6 +181,7 @@ export function SatisfactionPanel({ run }: { run: RunRecord }) {
         </span>
         <span className="muted">paciência de {formatMs(m.patienceMs ?? run.config.patienceMs)}</span>
       </div>
+      <ReputationRow m={m} />
     </div>
   )
 }

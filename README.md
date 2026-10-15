@@ -152,6 +152,7 @@ Cada cliente recebe uma nota de 0 a 1:
 3. Operação recusada por saldo insuficiente: a nota é multiplicada por 0,8.
 4. Criança colocada no chão: a nota fica limitada a 0,6.
 5. Desistiu, ou idoso que passou mal: nota 0.
+6. Incômodo coletivo: quem está dentro da agência (na fila ou sendo atendido) no instante em que um idoso passa mal tem a nota multiplicada por 0,8; quando uma criança vai para o chão, por 0,9. Os descontos se acumulam, com piso: o incômodo nunca tira mais que metade da nota. A própria vítima não conta como testemunha.
 
 ```
 índice = 100 × média das notas
@@ -176,7 +177,31 @@ Exemplo com P = 500 ms (T = 125 ms):
 
 Índice 53,3, mediana 53,3 e P10 igual a 0. Humor médio 1,3, mediana neutro e P90 2,2 (entediado). O teste `reproduz o exemplo de 10 clientes` em `src/sim/metrics.test.ts` confere essas contas.
 
-O índice aparece no resumo da execução, na tabela, na matriz e nos gráficos da aba Comparações, junto com as desistências e os eventos. Execuções salvas por versões anteriores não têm essas métricas e aparecem com "-".
+Sem incômodo coletivo, o índice seria 53,3. Supondo que os clientes 3, 4 e 10 estavam na agência quando o idoso passou mal, e os clientes 3, 5 e 10 quando a criança foi para o chão, o cliente 3 cai de 0,40 para 0,40 × 0,8 × 0,9 = 0,29 e o cliente 10 de 0,27 para 0,19. Os clientes 4 e 5 já estavam com 0. O índice vai para 51,5.
+
+### Reputação da empresa
+
+A satisfação mede a experiência de cada cliente. A reputação mede o que eles contam lá fora, e incidentes públicos pesam mais do que a média dos atendimentos. Cada cliente com nota vira:
+
+| Grupo | Nota |
+|---|---|
+| promotor | 0,8 ou mais |
+| neutro | de 0,5 a 0,8 |
+| detrator | abaixo de 0,5 (quem desistiu entra aqui) |
+
+```
+reputação = % promotores − % detratores
+          − 10 por idoso que passou mal
+          − 20 se alguma conta terminou com saldo errado
+```
+
+O resultado fica entre −100 e +100. É aqui que o dinheiro inconsistente pesa na execução inteira: banco que some com dinheiro vira escândalo, mesmo para quem não teve a conta afetada.
+
+No exemplo acima (já com o incômodo coletivo) há 4 promotores, 1 neutro e 5 detratores: 40% − 50% = −10. O idoso que passou mal tira 10 e a conta errada do cliente 8 tira 20. Reputação: −40.
+
+### Qual combinação escolher
+
+O índice e a reputação aparecem no resumo da execução, na tabela, na matriz e nos gráficos da aba Comparações, junto com as desistências e os eventos. A aba também traz um ranking das combinações do cenário, ordenado pela reputação média, com a satisfação desempatando. Combinações que travaram em deadlock em todas as tentativas vão para o fim. Para a média ficar estável, rode as 16 combinações algumas vezes. Execuções salvas por versões anteriores não têm essas métricas e aparecem com "-".
 
 ## Algoritmos de escalonamento
 
@@ -257,7 +282,7 @@ Ao detectar, o app encerra os workers, destaca em vermelho os caixas e as contas
 
 ## Métricas
 
-Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little, desistências, idosos que passaram mal, crianças no chão, humor (média, mediana e P90), índice de satisfação (média, mediana, P10, preferenciais e comuns) e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
+Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little, desistências, idosos que passaram mal, crianças no chão, clientes incomodados por esses incidentes, humor (média, mediana e P90), índice de satisfação (média, mediana, P10, preferenciais e comuns), reputação da empresa (com promotores, neutros e detratores) e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
 
 ### Teorema de Little e estabilidade
 
@@ -305,7 +330,7 @@ src/
     watchdog.ts     grafo de espera e detecção de deadlock
     timeline.ts     registro da execução e estado da agência em um instante
     metrics.ts      cálculo das métricas
-    satisfaction.ts paciência, eventos, humor e índice de satisfação
+    satisfaction.ts paciência, eventos, incômodo coletivo, humor, satisfação e reputação
     engine.ts       sobe os workers, roda o watchdog e monta o resultado
     *.test.ts       testes unitários
   workers/

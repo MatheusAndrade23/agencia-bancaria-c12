@@ -211,6 +211,13 @@ export interface Metrics {
   satisfactionP10?: number
   satisfactionPref?: number
   satisfactionCommon?: number
+  /** clientes que viram um idoso passar mal ou uma criança ir para o chão */
+  disturbed?: number
+  /** reputação da empresa, de −100 a +100: % promotores − % detratores − incidentes públicos */
+  reputation?: number
+  promoters?: number
+  neutrals?: number
+  detractors?: number
 }
 
 export interface RunRecord {
