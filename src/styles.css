@@ -35,6 +35,24 @@
   --road: #ebebeb;
   --road-mark: #d6d6d6;
   --road-gap: #ffffff;
+  --lobby-wall: #f8f6f5;
+  --lobby-room: #eceef0;
+  --lobby-alcove: #e1e4e7;
+  --lobby-alcove-line: #cdd1d6;
+  --lobby-rivet: #b9bec4;
+  --lobby-grille: #d5d9dd;
+  --lobby-staff: #f3efeb;
+  --lobby-seam: #e8e2dc;
+  --lobby-tile-a: #f4f4f4;
+  --lobby-tile-b: #efefef;
+  --lobby-desk: #ffffff;
+  --lobby-counter: #f7f7f7;
+  --lobby-counter-top: #ffffff;
+  --lobby-line: #dedede;
+  --lobby-post: #b4b4b4;
+  --lobby-plate: #ec0000;
+  --lobby-plate-ink: #ffffff;
+  --lobby-mat: #f6dede;
   --stage-top: #ffffff;
   --stage-bottom: #ececec;
   --hero-from: #ec0000;
@@ -80,6 +98,24 @@
   --road: #2b2f34;
   --road-mark: #4a4f56;
   --road-gap: #2b2f34;
+  --lobby-wall: #1c1f23;
+  --lobby-room: #202428;
+  --lobby-alcove: #262a2f;
+  --lobby-alcove-line: #353a41;
+  --lobby-rivet: #464c54;
+  --lobby-grille: #2d3238;
+  --lobby-staff: #1a1c1f;
+  --lobby-seam: #212428;
+  --lobby-tile-a: #17191c;
+  --lobby-tile-b: #1a1d20;
+  --lobby-desk: #25292e;
+  --lobby-counter: #23262b;
+  --lobby-counter-top: #2c3035;
+  --lobby-line: #33373d;
+  --lobby-post: #5a6068;
+  --lobby-plate: #b80000;
+  --lobby-plate-ink: #ffffff;
+  --lobby-mat: #3a2224;
   --stage-top: #262a2f;
   --stage-bottom: #141618;
   --hero-from: #d40000;
@@ -341,6 +377,40 @@ th.num, td.num { text-align: right; }
 .stage-floor { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .stage-floor > * { position: absolute; left: 0; top: 0; }
 .stage-lines { pointer-events: none; }
+/* saguão desenhado atrás do palco */
+.stage-lobby { pointer-events: none; z-index: 0; }
+.lobby-wall { fill: var(--lobby-wall); }
+.lobby-room { fill: var(--lobby-room); }
+.lobby-alcove { fill: var(--lobby-alcove); stroke: var(--lobby-alcove-line); stroke-width: 1.5; }
+.lobby-rivet circle { fill: var(--lobby-rivet); }
+.lobby-grille { stroke: var(--lobby-grille); stroke-width: 2.5; stroke-linecap: round; fill: none; }
+.lobby-staff { fill: var(--lobby-staff); }
+.lobby-seam { stroke: var(--lobby-seam); stroke-width: 1; fill: none; }
+.lobby-tile-a { fill: var(--lobby-tile-a); }
+.lobby-tile-b { fill: var(--lobby-tile-b); }
+.lobby-baseboard { fill: var(--lobby-line); }
+.lobby-stripe { fill: var(--brand); opacity: 0.55; }
+.lobby-brand { opacity: 0.8; }
+.lobby-brand text { fill: var(--brand); }
+.lobby-desk { fill: var(--lobby-desk); stroke: var(--lobby-line); }
+.lobby-glass { fill: var(--lobby-line); }
+.lobby-counter-top { fill: var(--lobby-counter-top); }
+.lobby-counter { fill: var(--lobby-counter); stroke: var(--lobby-line); }
+.lobby-shadow { fill: var(--lobby-line); opacity: 0.6; }
+.lobby-plate { fill: var(--lobby-plate); opacity: 0.85; }
+.lobby-plate-text { fill: var(--lobby-plate-ink); font-weight: 700; }
+.lobby-belt { stroke: var(--brand); stroke-width: 3; stroke-linecap: round; opacity: 0.3; }
+.lobby-post { fill: var(--lobby-post); }
+.lobby-post-base { fill: var(--lobby-line); }
+.lobby-pole { stroke: var(--lobby-post); stroke-width: 2; }
+.lobby-sign { fill: var(--surface); stroke: var(--lobby-line); }
+.lobby-sign-star { fill: var(--warning); opacity: 0.85; }
+.lobby-sign-text { fill: var(--text-muted); font-weight: 700; }
+.lobby-door-frame { fill: var(--lobby-counter-top); stroke: var(--brand); stroke-width: 3; }
+.lobby-door-glass { fill: var(--lock-soft); stroke: var(--lobby-line); }
+.lobby-door-handle { stroke: var(--brand); stroke-width: 2.5; stroke-linecap: round; }
+.lobby-mat { fill: var(--lobby-mat); stroke: var(--brand); stroke-opacity: 0.4; }
+.lobby-mat-text { fill: var(--brand); font-weight: 700; opacity: 0.8; }
 .line-hold { stroke: var(--lock); stroke-width: 3; stroke-linecap: round; }
 .line-wait { stroke: var(--warning); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 7 7; animation: dash 0.7s linear infinite; }
 .line-dead { stroke: var(--critical); stroke-width: 4; }
@@ -364,7 +434,6 @@ th.num, td.num { text-align: right; }
 .stage-teller-op { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .stage-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; }
-.stage-door { display: flex; flex-direction: column; align-items: center; font-size: 34px; line-height: 1; translate: -50% -50%; }
 
 .person { display: flex; flex-direction: column; align-items: center; width: 52px; transition: transform 0.55s cubic-bezier(0.3, 0.7, 0.3, 1), opacity 0.45s ease; will-change: transform; }
 .person-face { font-size: 30px; line-height: 1; }
@@ -455,7 +524,6 @@ th.num, td.num { text-align: right; }
 .stage-teller-face { line-height: 0; }
 .stage-money { display: inline-flex; align-items: center; gap: 4px; }
 .stage-deadlock strong { display: inline-flex; align-items: center; gap: 6px; }
-.stage-door { gap: 2px; }
 
 /* ---------- tela da fila ---------- */
 .hero { position: relative; overflow: hidden; display: grid; grid-template-columns: 1fr auto; gap: 18px 28px; align-items: center; color: #ffffff; background: linear-gradient(120deg, var(--hero-from) 0%, var(--hero-mid) 60%, var(--hero-to) 100%); border-radius: 4px; padding: 24px 28px; box-shadow: 0 6px 20px var(--brand-shadow); }

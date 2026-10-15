@@ -6,6 +6,7 @@ import {
 } from '../sim/types'
 import { cycleText } from './DeadlockPanel'
 import { Face, Icon, Person, Teller, type Mood } from './icons'
+import { Saguao, stageLayout } from './Saguao'
 import { formatMs, usePalette } from './theme'
 
 interface Props {
@@ -73,28 +74,23 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
   }, [clients, config.criticalWindowMs])
 
   const { w, h } = size
-  const vaultY = Math.max(58, h * 0.12)
-  const tellerY = h * 0.41
-  const serveY = tellerY + 100
-  const queueTop = serveY + 118
-  const vaultW = Math.min(170, w / config.accounts - 12)
-  const tellerW = Math.min(190, w / config.tellers - 14)
-  const vaultAt = (a: number): Point => ({ x: (w * (a + 0.5)) / config.accounts, y: vaultY })
-  const tellerAt = (t: number): Point => ({ x: (w * (t + 0.5)) / config.tellers, y: tellerY })
+  const layout = stageLayout(w, h, config.accounts, config.tellers)
+  const { vaultY, tellerY, serveY, queueTop, vaultW, tellerW, vaultAt, tellerAt, door, rows, rowHeight, lineWidth, queueLeft } = layout
   const globalAt: Point = { x: w / 2, y: (vaultY + tellerY) / 2 + 4 }
   const lockAt = (lock: number): Point => (lock >= config.accounts ? globalAt : { x: vaultAt(lock).x, y: vaultY + 44 })
-  const door: Point = { x: w - 36, y: h - 60 }
 
-  // fila em cobrinha: o primeiro da fila fica à esquerda; aperta os lugares se não couber
-  const rowHeight = 84
-  const rows = Math.max(1, Math.floor((h - queueTop - 6) / rowHeight))
-  const lineWidth = w - 150
+  // fila em cobrinha: o primeiro da fila fica à esquerda da primeira fileira e cada fileira
+  // seguinte volta no sentido contrário; aperta os lugares se não couber
   const slotWidth = Math.max(24, Math.min(62, (lineWidth * rows) / Math.max(1, view.queue.length)))
   const perRow = Math.max(1, Math.floor(lineWidth / slotWidth))
-  const slotAt = (position: number): Point => ({
-    x: 60 + (position % perRow) * slotWidth + slotWidth / 2,
-    y: queueTop + Math.min(rows - 1, Math.floor(position / perRow)) * rowHeight,
-  })
+  const slotAt = (position: number): Point => {
+    const row = Math.min(rows - 1, Math.floor(position / perRow))
+    const column = position % perRow
+    return {
+      x: queueLeft + (row % 2 === 0 ? column : perRow - 1 - column) * slotWidth + slotWidth / 2,
+      y: queueTop + row * rowHeight,
+    }
+  }
 
   const queuePosition = new Map(view.queue.map((item, position) => [item.client, position]))
   const cycleTellers = new Set(deadlock && view.deadlockVisible ? deadlock.cycle.map((s) => s.teller) : [])
@@ -251,6 +247,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
       </header>
 
       <div className="stage-floor" ref={floorRef}>
+        <Saguao w={w} h={h} accounts={config.accounts} tellers={config.tellers} />
         {/* cadeados: linha contínua = o caixa tem o lock; tracejada = está esperando */}
         <svg className="stage-lines" width={w} height={h} aria-hidden>
           {view.tellers.flatMap((teller, t) => {
@@ -337,16 +334,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
           )
         })}
 
-        <div className="stage-label" style={{ transform: `translate(14px, ${queueTop - 50}px)` }}>
+        <div className="stage-label" style={{ transform: `translate(14px, ${queueTop - 64}px)` }}>
           Fila · {view.queue.length} esperando · {view.notArrived} a caminho · {view.done} atendidos
-        </div>
-        <div className="stage-door" style={{ transform: `translate(${door.x}px, ${door.y}px)` }} aria-hidden>
-          <svg viewBox="0 0 40 56" width={40} height={56}>
-            <rect x="2" y="2" width="36" height="52" rx="2" strokeWidth="3" style={{ fill: 'var(--surface)', stroke: 'var(--brand)' }} />
-            <rect x="8" y="8" width="24" height="18" style={{ fill: 'var(--brand-soft)' }} />
-            <circle cx="30" cy="32" r="2" style={{ fill: 'var(--brand)' }} />
-          </svg>
-          <span className="small muted">entrada</span>
         </div>
 
         {people}
