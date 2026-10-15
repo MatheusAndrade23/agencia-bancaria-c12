@@ -22,11 +22,18 @@ interface Props {
 interface MetricOption {
   key: string
   label: string
-  value(m: Metrics): number
+  /** undefined = métrica ausente (execução salva por uma versão antiga) */
+  value(m: Metrics): number | undefined
   format(value: number): string
 }
 
 const METRIC_OPTIONS: MetricOption[] = [
+  { key: 'satisfaction', label: 'Índice de satisfação (0 a 100)', value: (m) => m.satisfaction, format: (v) => formatNumber(v, 1) },
+  { key: 'satisfactionCommon', label: 'Satisfação dos comuns', value: (m) => m.satisfactionCommon, format: (v) => formatNumber(v, 1) },
+  { key: 'satisfactionPref', label: 'Satisfação dos preferenciais', value: (m) => m.satisfactionPref, format: (v) => formatNumber(v, 1) },
+  { key: 'gaveUp', label: 'Desistências', value: (m) => m.gaveUp, format: (v) => formatNumber(v, 1) },
+  { key: 'events', label: 'Idosos que passaram mal + crianças no chão', value: (m) => (m.elderlySick === undefined ? undefined : m.elderlySick + (m.infantFloor ?? 0)), format: (v) => formatNumber(v, 1) },
+  { key: 'mood', label: 'Humor médio (0 feliz a 4 furioso)', value: (m) => m.moodAvg, format: (v) => formatNumber(v, 2) },
   { key: 'waitAvg', label: 'Espera média na fila', value: (m) => m.waitAvgMs, format: formatMs },
   { key: 'waitCommon', label: 'Espera média dos comuns', value: (m) => m.waitCommonAvgMs, format: formatMs },
   { key: 'waitPref', label: 'Espera média dos preferenciais', value: (m) => m.waitPrefAvgMs, format: formatMs },
@@ -41,7 +48,7 @@ const METRIC_OPTIONS: MetricOption[] = [
   { key: 'money', label: 'Dinheiro inconsistente (módulo)', value: (m) => Math.abs(m.inconsistentCents), format: (v) => formatMoney(Math.round(v)) },
 ]
 
-type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
+type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'satisfaction' | 'gaveUp' | 'events' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunRecord): number | string; render(run: RunRecord): React.ReactNode }[] = [
   { key: 'date', label: 'Data', value: (r) => r.createdAt, render: (r) => new Date(r.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) },
@@ -49,6 +56,9 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunR
   { key: 'algorithm', label: 'Algoritmo', value: (r) => ALGORITHMS.indexOf(r.algorithm), render: (r) => ALGORITHM_LABEL[r.algorithm] },
   { key: 'lock', label: 'Sincronismo', value: (r) => LOCK_MODES.indexOf(r.lockMode), render: (r) => LOCK_MODE_LABEL[r.lockMode] },
   { key: 'status', label: 'Status', value: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
+  { key: 'satisfaction', label: 'Satisfação', numeric: true, value: (r) => r.metrics.satisfaction ?? -1, render: (r) => (r.metrics.satisfaction === undefined ? '-' : <span title={`mediana ${formatNumber(r.metrics.satisfactionMedian ?? 0, 1)} · P10 ${formatNumber(r.metrics.satisfactionP10 ?? 0, 1)}`}>{formatNumber(r.metrics.satisfaction, 1)}</span>) },
+  { key: 'gaveUp', label: 'Desistências', numeric: true, value: (r) => r.metrics.gaveUp ?? -1, render: (r) => (r.metrics.gaveUp === undefined ? '-' : <span className={r.metrics.gaveUp ? 'bad' : ''}>{r.metrics.gaveUp}</span>) },
+  { key: 'events', label: 'Passou mal / chão', numeric: true, value: (r) => (r.metrics.elderlySick ?? -1) + (r.metrics.infantFloor ?? 0), render: (r) => (r.metrics.elderlySick === undefined ? '-' : `${r.metrics.elderlySick} / ${r.metrics.infantFloor ?? 0}`) },
   { key: 'makespan', label: 'Makespan', numeric: true, value: (r) => r.metrics.makespanMs, render: (r) => formatMs(r.metrics.makespanMs) },
   { key: 'wait', label: 'Espera média', numeric: true, value: (r) => r.metrics.waitAvgMs, render: (r) => formatMs(r.metrics.waitAvgMs) },
   { key: 'waitPref', label: 'Pref.', numeric: true, value: (r) => r.metrics.waitPrefAvgMs, render: (r) => formatMs(r.metrics.waitPrefAvgMs) },
@@ -300,7 +310,7 @@ function Heatmap({ runs, metricKey, onMetricChange }: HeatmapProps) {
         lockMode,
         total: all.length,
         deadlocks: all.filter((run) => run.status === 'deadlock').length,
-        stats: meanAndSd(completed.map((run) => metric.value(run.metrics))),
+        stats: meanAndSd(completed.map((run) => metric.value(run.metrics)).filter((v): v is number => v !== undefined)),
       }
     }),
   )

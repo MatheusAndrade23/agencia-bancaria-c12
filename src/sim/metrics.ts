@@ -1,3 +1,4 @@
+import { outcomesAt, patienceUs, summarize } from './satisfaction'
 import { RESULT_REFUSED, type Client, type Metrics, type ScenarioConfig, type Timeline } from './types'
 
 function mean(values: number[]): number {
@@ -26,9 +27,11 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
   let served = 0
   let refused = 0
   let lastEndUs = 0
+  let lastGaveUpUs = 0
 
   timeline.clients.forEach((trace, i) => {
     const client = clients[i]
+    if (client && trace.gaveUpUs > 0) lastGaveUpUs = Math.max(lastGaveUpUs, trace.gaveUpUs)
     if (!client || trace.startUs === 0) return
     const waitMs = (trace.startUs - client.arrivalUs) / 1000
     waits.push(waitMs)
@@ -43,9 +46,11 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
     }
   })
 
-  // execução completa: o makespan é o fim do último atendimento; senão, o instante da parada
-  const complete = served === clients.length
-  const makespanUs = Math.max(1, complete ? lastEndUs : timeline.endUs)
+  // execução completa (todos atendidos ou desistentes): o makespan é o último fim de
+  // atendimento ou desistência; senão, o instante da parada
+  const gaveUp = timeline.clients.filter((trace) => trace.gaveUpUs > 0).length
+  const complete = served + gaveUp === clients.length
+  const makespanUs = Math.max(1, complete ? Math.max(lastEndUs, lastGaveUpUs) : timeline.endUs)
 
   const expected = new Array<number>(config.accounts).fill(config.initialBalance)
   for (const [, account, , delta] of timeline.writes) expected[account] += delta
@@ -61,6 +66,10 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
   const rho = (arrivalRate * (serviceAvgMs / 1000)) / config.tellers
   // Teorema de Little (L = λ·W) no intervalo observado, onde λ é a vazão efetiva.
   const throughput = served / (makespanUs / 1_000_000)
+
+  // satisfação: desfecho de cada cliente até o fim, com as contas que terminaram erradas
+  const wrong = expected.map((value, a) => value !== timeline.balances[a])
+  const s = summarize(clients, outcomesAt(config, clients, timeline, makespanUs, wrong))
 
   return {
     makespanMs: makespanUs / 1000,
@@ -87,6 +96,20 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
     rho,
     littleL: throughput * (mean(turnarounds) / 1000),
     littleLq: throughput * (mean(waits) / 1000),
+    patienceMs: patienceUs(config) / 1000,
+    gaveUp: s.gaveUp,
+    gaveUpPref: s.gaveUpPref,
+    gaveUpCommon: s.gaveUpCommon,
+    elderlySick: s.elderlySick,
+    infantFloor: s.infantFloor,
+    moodAvg: s.moodAvg,
+    moodMedian: s.moodMedian,
+    moodP90: s.moodP90,
+    satisfaction: s.satisfaction ?? undefined,
+    satisfactionMedian: s.satisfactionMedian,
+    satisfactionP10: s.satisfactionP10,
+    satisfactionPref: s.satisfactionPref ?? undefined,
+    satisfactionCommon: s.satisfactionCommon ?? undefined,
   }
 }
 

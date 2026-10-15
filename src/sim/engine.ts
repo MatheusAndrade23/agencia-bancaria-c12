@@ -8,8 +8,9 @@ import {
   type Layout,
 } from './layout'
 import { computeMetrics } from './metrics'
+import { patienceUs } from './satisfaction'
 import { generateQueue, sanitizeConfig, scenarioId } from './queue'
-import { packTimeline, snapshotTimeline } from './timeline'
+import { closeQueue, packTimeline, snapshotTimeline } from './timeline'
 import {
   type Algorithm, type Client, type DeadlockInfo, type LockMode, type RunRecord, type RunStatus,
   type ScenarioConfig, type Timeline,
@@ -84,8 +85,11 @@ export function startRun(options: RunOptions): RunHandle {
     workers.forEach((worker) => worker.terminate())
     finalTimeline = snapshotTimeline(mem, layout, endUs, true)
     if (status === 'completed') {
-      // a execução termina de fato quando o último cliente é concluído
-      finalTimeline.endUs = Math.max(1, ...finalTimeline.clients.map((trace) => trace.endUs))
+      // a execução termina de fato quando o último cliente é concluído ou desiste
+      finalTimeline.endUs = Math.max(1, ...finalTimeline.clients.map((trace) => Math.max(trace.endUs, trace.gaveUpUs)))
+    } else {
+      // deadlock ou parada: quem ficou na fila além da paciência teria ido embora
+      closeQueue(finalTimeline, clients, patienceUs(config))
     }
     resolveFinished({
       id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -164,6 +168,7 @@ export function startRun(options: RunOptions): RunHandle {
       lockMode: options.lockMode,
       criticalWindowUs: Math.round(config.criticalWindowMs * 1000),
       agingUs: Math.round(config.agingMs * 1000),
+      patienceUs: patienceUs(config),
     }
     worker.postMessage(init)
   })

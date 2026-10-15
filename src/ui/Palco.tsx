@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { eventAt, moodLevel, outcomesAt, patienceUs as patienceOf, summarize } from '../sim/satisfaction'
 import type { AgencyView } from '../sim/timeline'
 import {
-  OPS, OP_BILL, OP_DEPOSIT, OP_LOAN, OP_TRANSFER, OP_WITHDRAW, RESULT_OK, RESULT_REFUSED, accountName, formatMoney,
+  KIND_ELDERLY, KIND_INFANT, OPS, OP_BILL, OP_DEPOSIT, OP_LOAN, OP_TRANSFER, OP_WITHDRAW, RESULT_OK, RESULT_REFUSED,
+  accountName, formatMoney,
   type Client, type DeadlockInfo, type LockMode, type ScenarioConfig, type Timeline,
 } from '../sim/types'
 import { cycleText } from './DeadlockPanel'
-import { Face, Icon, Person, Teller, type Mood } from './icons'
+import { Face, Icon, Person, Teller, moodFace, type Mood } from './icons'
+import { moodText, satisfactionTone } from './MetricsSummary'
 import { Saguao, stageLayout } from './Saguao'
-import { formatMs, usePalette } from './theme'
+import { formatMs, formatNumber, usePalette } from './theme'
 
 interface Props {
   config: ScenarioConfig
@@ -34,13 +37,12 @@ interface Point {
 
 const STATE_LABEL = { idle: 'Livre', serving: 'Atendendo', waiting: 'Esperando lock', deadlock: 'DEADLOCK', finished: 'Encerrado' }
 
-/** Humor de quem espera: vai piorando conforme a paciência acaba. */
-function mood(ratio: number): { face: Mood; level: 'calm' | 'bored' | 'angry' | 'furious' } {
-  if (ratio < 0.3) return { face: 'happy', level: 'calm' }
-  if (ratio < 0.6) return { face: 'neutral', level: 'calm' }
-  if (ratio < 0.85) return { face: 'bored', level: 'bored' }
-  if (ratio < 1) return { face: 'angry', level: 'angry' }
-  return { face: 'furious', level: 'furious' }
+const MOOD_CLASS = ['calm', 'calm', 'bored', 'angry', 'furious'] as const
+
+/** Humor de quem espera: vai piorando conforme a paciência acaba (mesma escala das métricas). */
+function mood(ratio: number): { face: Mood; level: (typeof MOOD_CLASS)[number] } {
+  const level = moodLevel(ratio)
+  return { face: moodFace(level), level: MOOD_CLASS[level] }
 }
 
 function lerp(a: Point, b: Point, p: number, arc = 0): Point {
@@ -67,11 +69,14 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
     return () => observer.disconnect()
   }, [])
 
-  // paciência: quanto alguém aguenta esperar antes de ficar furioso (4 atendimentos médios)
-  const patienceUs = useMemo(() => {
-    const total = clients.reduce((sum, c) => sum + c.durationUs, 0)
-    return Math.max(1, (total / Math.max(1, clients.length) + config.criticalWindowMs * 1000) * 4)
-  }, [clients, config.criticalWindowMs])
+  // paciência do cenário: quem espera isso sem ser chamado vai embora
+  const patienceUs = patienceOf(config)
+
+  // índice de satisfação ao vivo: só quem já foi atendido ou desistiu até o instante t
+  const live = useMemo(() => {
+    const wrong = view.accounts.map((account) => account.balance !== account.expected)
+    return summarize(clients, outcomesAt(config, clients, timeline, tUs, wrong))
+  }, [config, clients, timeline, tUs, view.accounts])
 
   const { w, h } = size
   const layout = stageLayout(w, h, config.accounts, config.tellers)
@@ -93,6 +98,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
   }
 
   const queuePosition = new Map(view.queue.map((item, position) => [item.client, position]))
+  const queueItem = new Map(view.queue.map((item) => [item.client, item]))
   const cycleTellers = new Set(deadlock && view.deadlockVisible ? deadlock.cycle.map((s) => s.teller) : [])
 
   // ---- pessoas ----
@@ -111,13 +117,29 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
     let opacity = 1
     let ratio = -1
     let bubble = ''
+    let sick = false
+    let floor = false
+    const giveUpAt = trace.gaveUpUs || (trace.startUs === 0 ? client.arrivalUs + patienceUs : 0)
 
     if (client.arrivalUs > tUs) {
       if (client.arrivalUs > tUs + fxUs) return // ainda longe da agência
       at = door
       opacity = 0
+    } else if (giveUpAt > 0 && giveUpAt <= tUs && (trace.startUs === 0 || trace.startUs > tUs)) {
+      // desistiu: sai furioso pela porta
+      const p = (tUs - giveUpAt) / (fxUs * 1.4 || 1)
+      if (p > 1) return
+      at = door
+      opacity = p < 0.6 ? 1 : 0
+      face = 'furious'
+      level = 'furious'
+      bubble = 'desistiu'
+      sick = eventAt(client, KIND_ELDERLY, patienceUs, giveUpAt) > 0
+      floor = eventAt(client, KIND_INFANT, patienceUs, giveUpAt) > 0
     } else if (trace.startUs === 0 || trace.startUs > tUs) {
       const position = queuePosition.get(i) ?? 0
+      sick = queueItem.get(i)?.sick ?? false
+      floor = queueItem.get(i)?.floor ?? false
       at = slotAt(position)
       const waitUs = tUs - client.arrivalUs
       ratio = waitUs / patienceUs
@@ -131,6 +153,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
       const teller = view.tellers[trace.teller]
       face = teller?.state === 'deadlock' ? 'dizzy' : teller?.state === 'waiting' ? 'tense' : 'happy'
       level = teller?.state === 'deadlock' ? 'furious' : 'calm'
+      sick = eventAt(client, KIND_ELDERLY, patienceUs, trace.startUs) > 0
+      floor = eventAt(client, KIND_INFANT, patienceUs, trace.startUs) > 0
     } else {
       if (tUs - trace.endUs > fxUs * 1.4) return // já foi embora
       at = { x: tellerAt(trace.teller).x, y: serveY + 46 }
@@ -138,16 +162,17 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
       face = trace.result === RESULT_REFUSED ? 'sad' : 'happy'
       bubble = trace.result === RESULT_REFUSED ? 'recusado' : ''
     }
+    if (sick && !bubble) bubble = 'passou mal'
 
     people.push(
       <div
         key={client.id}
-        className={`person person-${level} op-${op.key} ${client.priority === 1 ? 'person-pref' : ''}`}
+        className={`person person-${level} op-${op.key} ${client.priority === 1 ? 'person-pref' : ''} ${sick ? 'person-sick' : ''} ${floor ? 'person-floor' : ''}`}
         style={{ transform: `translate(${at.x}px, ${at.y}px)`, opacity, zIndex: ratio >= 1 ? 3 : 2 }}
         title={`Cliente #${client.id} · ${op.label} · ${formatMoney(client.amount)}`}
       >
         <span className="person-face">
-          <Person mood={face} color={palette.ops[client.op]} preferential={client.priority === 1} size={54} />
+          <Person mood={face} color={palette.ops[client.op]} preferential={client.priority === 1} kind={client.kind} sick={sick} floor={floor} size={54} />
         </span>
         <span className="person-tag">#{client.id}</span>
         {ratio >= 0 && (
@@ -227,6 +252,26 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
               </span>
               <span className="small muted">
                 espera média agora: preferenciais {formatMs(avg(waits.pref) / 1000)}, comuns {formatMs(avg(waits.common) / 1000)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className={`hud-box satisfaction-hud satisfaction-${live.satisfaction === null ? 'none' : satisfactionTone(live.satisfaction)}`}>
+          <span className="hud-label">Satisfação dos clientes</span>
+          <div className="starvation-row">
+            <span className="satisfaction-hud-score">
+              <strong>{live.satisfaction === null ? '-' : formatNumber(live.satisfaction, 0)}</strong>
+              <small>de 100</small>
+            </span>
+            <div className="starvation-meter">
+              <span className="small">
+                <Face mood={moodFace(live.moodAvg)} size={16} /> humor médio {moodText(live.moodAvg)}
+              </span>
+              <span className="small">
+                <Icon name="door" size={13} /> {live.gaveUp} desistiram
+              </span>
+              <span className="small">
+                <Icon name="alert" size={13} /> {live.elderlySick} passaram mal · <Icon name="baby" size={13} /> {live.infantFloor} no chão
               </span>
             </div>
           </div>
@@ -336,6 +381,7 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
 
         <div className="stage-label" style={{ transform: `translate(14px, ${queueTop - 64}px)` }}>
           Fila · {view.queue.length} esperando · {view.notArrived} a caminho · {view.done} atendidos
+          {view.gaveUp > 0 && ` · ${view.gaveUp} desistiram`}
         </div>
 
         {people}

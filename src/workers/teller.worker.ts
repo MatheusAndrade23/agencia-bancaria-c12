@@ -5,18 +5,19 @@
 import {
   createLayout,
   type Layout,
-  CLIENT_DONE, CLIENT_TAKEN, CLIENT_WAITING,
-  C_ACQ1, C_ACQ2, C_AMOUNT, C_ARRIVAL, C_DURATION, C_END, C_FROM, C_LOCK1, C_LOCK2, C_OP,
-  C_PRIORITY, C_RELEASE, C_RESULT, C_START, C_STATUS, C_TELLER, C_TO, C_WAIT1, C_WAIT2,
+  CLIENT_DONE, CLIENT_GAVE_UP, CLIENT_TAKEN, CLIENT_WAITING,
+  C_ACQ1, C_ACQ2, C_AMOUNT, C_ARRIVAL, C_DURATION, C_END, C_FLOOR, C_FROM, C_GAVE_UP, C_KIND, C_LOCK1,
+  C_LOCK2, C_OP, C_PRIORITY, C_RELEASE, C_RESULT, C_SICK, C_START, C_STATUS, C_TELLER, C_TO, C_WAIT1, C_WAIT2,
   H_DONE, H_PROGRESS, H_QUEUE_LOCK, H_STOP,
   L_OWNER, L_STATE,
   TELLER_FINISHED, TELLER_IDLE, TELLER_SERVING, TELLER_WAITING_LOCK,
   T_CLIENT, T_HOLD1, T_HOLD2, T_LOCK_WAIT, T_LOG_COUNT, T_SERVED, T_SLEEP, T_STATE, T_WAITING,
 } from '../sim/layout'
 import { lock, tryLock, unlock } from '../sim/mutex'
+import { FLOOR_FRACTION, SICK_FRACTION } from '../sim/satisfaction'
 import { pickNext, type ReadyClient } from '../sim/scheduler'
 import {
-  OP_DEPOSIT, OP_LOAN, OP_TRANSFER, RESULT_OK, RESULT_REFUSED,
+  KIND_ELDERLY, KIND_INFANT, OP_DEPOSIT, OP_LOAN, OP_TRANSFER, RESULT_OK, RESULT_REFUSED,
   type Algorithm, type LockMode,
 } from '../sim/types'
 
@@ -31,6 +32,8 @@ export interface TellerInit {
   lockMode: LockMode
   criticalWindowUs: number
   agingUs: number
+  /** quem espera isso sem ser chamado vai embora */
+  patienceUs: number
 }
 
 export interface TellerStart {
@@ -63,7 +66,29 @@ function sleepFor(durationUs: number): void {
   if (durationUs > 0) sleepUntil(nowUs() + durationUs)
 }
 
-/** Retira o próximo cliente da fila. A retirada é sempre protegida pelo lock da fila. */
+/**
+ * Registra o que aconteceu com quem está esperando: idoso que passou mal e criança que foi
+ * para o chão. Os instantes são os exatos (chegada + fração da paciência), mesmo que o caixa
+ * só tenha olhado a fila depois. Devolve true se o cliente desistiu.
+ */
+function checkPatience(base: number, arrivalUs: number, now: number): boolean {
+  const waitUs = now - arrivalUs
+  const kind = mem[base + C_KIND]
+  const sickAt = Math.round(SICK_FRACTION * init.patienceUs)
+  const floorAt = Math.round(FLOOR_FRACTION * init.patienceUs)
+  if (kind === KIND_ELDERLY && waitUs >= sickAt && mem[base + C_SICK] === 0) Atomics.store(mem, base + C_SICK, arrivalUs + sickAt)
+  if (kind === KIND_INFANT && waitUs >= floorAt && mem[base + C_FLOOR] === 0) Atomics.store(mem, base + C_FLOOR, arrivalUs + floorAt)
+  if (waitUs < init.patienceUs) return false
+  Atomics.store(mem, base + C_GAVE_UP, arrivalUs + init.patienceUs)
+  Atomics.store(mem, base + C_STATUS, CLIENT_GAVE_UP)
+  Atomics.add(mem, H_PROGRESS, 1)
+  return true
+}
+
+/**
+ * Retira o próximo cliente da fila. A retirada é sempre protegida pelo lock da fila.
+ * Na mesma varredura, quem já passou da paciência é marcado como desistente.
+ */
 function takeNextClient(): { client: number; nextArrivalUs: number } {
   const ready: ReadyClient[] = []
   let nextArrivalUs = -1
@@ -76,6 +101,7 @@ function takeNextClient(): { client: number; nextArrivalUs: number } {
     if (Atomics.load(mem, base + C_STATUS) !== CLIENT_WAITING) continue
     const arrivalUs = mem[base + C_ARRIVAL]
     if (arrivalUs <= now) {
+      if (checkPatience(base, arrivalUs, now)) continue
       ready.push({ index: i, arrivalUs, priority: mem[base + C_PRIORITY], durationUs: mem[base + C_DURATION] })
     } else if (nextArrivalUs < 0 || arrivalUs < nextArrivalUs) {
       nextArrivalUs = arrivalUs

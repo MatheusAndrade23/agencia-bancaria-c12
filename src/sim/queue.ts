@@ -1,5 +1,9 @@
 import { hashString, mulberry32 } from './rng'
-import { OPS, OP_TRANSFER, type Client, type OpMix, type OpType, type ScenarioConfig } from './types'
+import { ELDERLY_SHARE } from './satisfaction'
+import {
+  KIND_ELDERLY, KIND_INFANT, KIND_NONE, OPS, OP_TRANSFER,
+  type Client, type OpMix, type OpType, type ScenarioConfig,
+} from './types'
 
 export const LIMITS = {
   tellers: { min: 1, max: 8 },
@@ -10,9 +14,28 @@ export const LIMITS = {
   criticalWindowMs: { min: 0, max: 200 },
   durationScalePct: { min: 10, max: 1000 },
   agingMs: { min: 10, max: 10_000 },
+  patienceMs: { min: 10, max: 60_000 },
 }
 
-export const DEFAULT_CONFIG: ScenarioConfig = {
+/**
+ * Paciência sugerida para uma config: 4 atendimentos médios (duração esperada pela
+ * mistura de operações, mais a janela crítica), arredondada para 10 ms.
+ */
+export function suggestedPatienceMs(config: Omit<ScenarioConfig, 'patienceMs'>): number {
+  const weights = OPS.map((op) => Math.max(0, config.mix[op.key]))
+  const total = weights.reduce((a, b) => a + b, 0)
+  const avgMs = total > 0
+    ? OPS.reduce((sum, op, i) => sum + (weights[i] / total) * op.baseMs, 0)
+    : OPS[OP_TRANSFER].baseMs
+  const serviceMs = (avgMs * config.durationScalePct) / 100 + config.criticalWindowMs
+  return Math.max(10, Math.round((serviceMs * 4) / 10) * 10)
+}
+
+function withPatience(config: Omit<ScenarioConfig, 'patienceMs'>): ScenarioConfig {
+  return { ...config, patienceMs: suggestedPatienceMs(config) }
+}
+
+export const DEFAULT_CONFIG: ScenarioConfig = withPatience({
   tellers: 4,
   accounts: 5,
   initialBalance: 100_000,
@@ -24,7 +47,7 @@ export const DEFAULT_CONFIG: ScenarioConfig = {
   durationScalePct: 100,
   agingMs: 120,
   seed: 2026,
-}
+})
 
 export interface Preset {
   key: string
@@ -44,7 +67,7 @@ export const PRESETS: Preset[] = [
     key: 'race',
     name: 'Corrida (race condition)',
     description: 'Muitas transferências sobre poucas contas: sem lock, o dinheiro some ou aparece.',
-    config: {
+    config: withPatience({
       ...DEFAULT_CONFIG,
       accounts: 3,
       clients: 60,
@@ -53,13 +76,13 @@ export const PRESETS: Preset[] = [
       criticalWindowMs: 20,
       durationScalePct: 50,
       seed: 7,
-    },
+    }),
   },
   {
     key: 'deadlock',
     name: 'Deadlock',
     description: 'Só 2 contas e 100% de transferências cruzadas (A→B e B→A).',
-    config: {
+    config: withPatience({
       ...DEFAULT_CONFIG,
       accounts: 2,
       clients: 40,
@@ -68,22 +91,22 @@ export const PRESETS: Preset[] = [
       criticalWindowMs: 20,
       durationScalePct: 50,
       seed: 13,
-    },
+    }),
   },
   {
     key: 'starvation',
     name: 'Starvation',
-    description: 'Metade dos clientes é preferencial e a fila nunca esvazia: os comuns ficam para trás.',
-    config: {
+    description: 'Dois terços dos clientes são preferenciais e a fila nunca esvazia: os comuns ficam para trás e desistem.',
+    config: withPatience({
       ...DEFAULT_CONFIG,
       tellers: 3,
       clients: 70,
       mix: { deposit: 25, withdraw: 25, transfer: 25, bill: 15, loan: 10 },
-      preferentialPct: 50,
+      preferentialPct: 65,
       arrivalIntervalMs: 30,
-      agingMs: 200,
+      agingMs: 100,
       seed: 42,
-    },
+    }),
   },
 ]
 
@@ -107,6 +130,10 @@ export function sanitizeConfig(raw: ScenarioConfig): ScenarioConfig {
     criticalWindowMs: clamp(raw.criticalWindowMs, LIMITS.criticalWindowMs.min, LIMITS.criticalWindowMs.max),
     durationScalePct: clamp(raw.durationScalePct, LIMITS.durationScalePct.min, LIMITS.durationScalePct.max),
     agingMs: clamp(raw.agingMs, LIMITS.agingMs.min, LIMITS.agingMs.max),
+    // cenários salvos antes da desistência não têm paciência: usa a sugerida
+    patienceMs: Number.isFinite(raw.patienceMs)
+      ? clamp(raw.patienceMs, LIMITS.patienceMs.min, LIMITS.patienceMs.max)
+      : suggestedPatienceMs(raw),
     seed: Math.round(raw.seed) >>> 0,
   }
 }
@@ -118,7 +145,7 @@ export function scenarioId(config: ScenarioConfig): string {
     JSON.stringify([
       c.tellers, c.accounts, c.initialBalance, c.clients,
       c.mix.deposit, c.mix.withdraw, c.mix.transfer, c.mix.bill, c.mix.loan,
-      c.preferentialPct, c.arrivalIntervalMs, c.criticalWindowMs, c.durationScalePct, c.agingMs, c.seed,
+      c.preferentialPct, c.arrivalIntervalMs, c.criticalWindowMs, c.durationScalePct, c.agingMs, c.seed, c.patienceMs,
     ]),
   )
 }
@@ -142,6 +169,8 @@ function pickOp(mix: OpMix, r: number): OpType {
 export function generateQueue(rawConfig: ScenarioConfig): Client[] {
   const config = sanitizeConfig(rawConfig)
   const rand = mulberry32(config.seed)
+  // gerador separado para o tipo de preferencial: não muda os campos das filas que já existiam
+  const randKind = mulberry32(config.seed ^ 0x9e3779b9)
   const clients: Client[] = []
   let arrivalMs = 0
 
@@ -155,6 +184,7 @@ export function generateQueue(rawConfig: ScenarioConfig): Client[] {
     const rTo = rand()
     const rAmount = rand()
     const rDuration = rand()
+    const rKind = randKind()
 
     if (id > 0) arrivalMs += config.arrivalIntervalMs * (0.5 + rArrival)
     const op = pickOp(config.mix, rOp)
@@ -170,15 +200,17 @@ export function generateQueue(rawConfig: ScenarioConfig): Client[] {
     const amount = Math.max(100, Math.round((base * (0.05 + 0.35 * rAmount)) / 100) * 100)
     const durationMs = OPS[op].baseMs * (config.durationScalePct / 100) * (0.75 + 0.5 * rDuration)
 
+    const priority = rPriority * 100 < config.preferentialPct ? 1 : 0
     clients.push({
       id,
       arrivalUs: Math.round(arrivalMs * 1000),
-      priority: rPriority * 100 < config.preferentialPct ? 1 : 0,
+      priority,
       op,
       from,
       to,
       amount,
       durationUs: Math.max(1000, Math.round(durationMs * 1000)),
+      kind: priority === 0 ? KIND_NONE : rKind < ELDERLY_SHARE ? KIND_ELDERLY : KIND_INFANT,
     })
   }
   return clients

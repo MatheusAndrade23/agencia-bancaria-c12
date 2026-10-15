@@ -1,4 +1,5 @@
-import { Icon } from './icons'
+import { Face, Icon, moodFace } from './icons'
+import { MOOD_LABEL, type MoodLevel } from '../sim/satisfaction'
 import { STATUS_LABEL, formatMoney, type RunRecord } from '../sim/types'
 import { formatMs, formatNumber } from './theme'
 
@@ -74,12 +75,77 @@ export function LittlePanel({ run, compact }: { run: RunRecord; compact?: boolea
   )
 }
 
+export function moodText(level: number): string {
+  return MOOD_LABEL[Math.max(0, Math.min(4, Math.round(level))) as MoodLevel]
+}
+
+/** Faixa do índice: verde a partir de 70, amarelo a partir de 40, vermelho abaixo. */
+export function satisfactionTone(value: number): 'good' | 'warn' | 'bad' {
+  return value >= 70 ? 'good' : value >= 40 ? 'warn' : 'bad'
+}
+
+/** Índice de satisfação, humor e o que aconteceu na fila (desistências e eventos). */
+export function SatisfactionPanel({ run }: { run: RunRecord }) {
+  const m = run.metrics
+  if (m.satisfaction === undefined || m.moodAvg === undefined || m.moodMedian === undefined || m.moodP90 === undefined) return null
+  const tone = satisfactionTone(m.satisfaction)
+  const moods: [string, number][] = [
+    ['média', m.moodAvg],
+    ['mediana', m.moodMedian],
+    ['P90', m.moodP90],
+  ]
+  return (
+    <div className={`satisfaction satisfaction-${tone}`}>
+      <div className="satisfaction-head">
+        <span className="satisfaction-score">
+          <strong>{formatNumber(m.satisfaction, 1)}</strong>
+          <small>de 100</small>
+        </span>
+        <div>
+          <strong>Índice de satisfação</strong>
+          <span className="small muted">
+            mediana {formatNumber(m.satisfactionMedian ?? 0, 1)} · 10% piores com até {formatNumber(m.satisfactionP10 ?? 0, 1)}
+          </span>
+          <span className="small muted">
+            preferenciais {m.satisfactionPref === undefined ? '-' : formatNumber(m.satisfactionPref, 1)} · comuns{' '}
+            {m.satisfactionCommon === undefined ? '-' : formatNumber(m.satisfactionCommon, 1)}
+          </span>
+        </div>
+      </div>
+      <div className="satisfaction-moods" aria-label="Humor ao ser chamado ou desistir">
+        {moods.map(([label, value]) => (
+          <div key={label}>
+            <Face mood={moodFace(value)} size={26} />
+            <span className="small">
+              <strong>{moodText(value)}</strong> {formatNumber(value, 1)}
+            </span>
+            <small className="muted">{label} do humor</small>
+          </div>
+        ))}
+      </div>
+      <div className="satisfaction-events small">
+        <span className={m.gaveUp ? 'bad' : ''}>
+          <Icon name="door" size={14} /> {m.gaveUp ?? 0} desistiram ({m.gaveUpPref ?? 0} pref., {m.gaveUpCommon ?? 0} comuns)
+        </span>
+        <span className={m.elderlySick ? 'bad' : ''}>
+          <Icon name="alert" size={14} /> {m.elderlySick ?? 0} idosos passaram mal
+        </span>
+        <span>
+          <Icon name="baby" size={14} /> {m.infantFloor ?? 0} crianças no chão
+        </span>
+        <span className="muted">paciência de {formatMs(m.patienceMs ?? run.config.patienceMs)}</span>
+      </div>
+    </div>
+  )
+}
+
 /** Resumo das métricas de uma execução. */
 export function MetricsSummary({ run }: { run: RunRecord }) {
   const m = run.metrics
   const items: [string, string, boolean?][] = [
     ['Makespan', formatMs(m.makespanMs)],
     ['Atendidos', `${m.served}/${m.total}${m.refused ? ` (${m.refused} recusados)` : ''}`],
+    ...(m.gaveUp !== undefined ? [['Desistências', String(m.gaveUp), m.gaveUp > 0] as [string, string, boolean]] : []),
     ['Espera média', formatMs(m.waitAvgMs)],
     ['Espera mín. / máx.', `${formatMs(m.waitMinMs)} / ${formatMs(m.waitMaxMs)}`],
     ['Espera preferenciais', formatMs(m.waitPrefAvgMs)],
@@ -92,6 +158,7 @@ export function MetricsSummary({ run }: { run: RunRecord }) {
   ]
   return (
     <div className="metrics">
+      <SatisfactionPanel run={run} />
       <LittlePanel run={run} />
       <dl className="metric-grid">
         {items.map(([label, value, bad]) => (

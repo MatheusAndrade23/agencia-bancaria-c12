@@ -1,6 +1,6 @@
 import { Icon, OpIcon } from './icons'
 import { useMemo } from 'react'
-import { LIMITS, PRESETS, scenarioId } from '../sim/queue'
+import { LIMITS, PRESETS, sanitizeConfig, scenarioId, suggestedPatienceMs } from '../sim/queue'
 import { OPS, type OpMix, type SavedScenario, type ScenarioConfig } from '../sim/types'
 import { formatMs } from './theme'
 
@@ -99,8 +99,18 @@ export function ConfigPanel(props: Props) {
           <Field label="Janela crítica" value={config.criticalWindowMs} {...LIMITS.criticalWindowMs} suffix="ms" disabled={disabled} onChange={(v) => set({ criticalWindowMs: v })} />
           <Field label="Escala das durações" value={config.durationScalePct} {...LIMITS.durationScalePct} step={10} suffix="%" disabled={disabled} onChange={(v) => set({ durationScalePct: v })} />
           <Field label="Passo do aging" value={config.agingMs} {...LIMITS.agingMs} step={10} suffix="ms" disabled={disabled} onChange={(v) => set({ agingMs: v })} />
+          <Field label="Paciência" value={config.patienceMs} {...LIMITS.patienceMs} step={10} suffix="ms" disabled={disabled} onChange={(v) => set({ patienceMs: v })} />
           <Field label="Semente (seed)" value={config.seed} min={0} max={4294967295} disabled={disabled} onChange={(v) => set({ seed: v })} />
         </div>
+
+        {config.patienceMs !== suggestedPatienceMs(config) && (
+          <p className="muted small">
+            Paciência sugerida para este cenário (4 atendimentos médios): {formatMs(suggestedPatienceMs(config))}.{' '}
+            <button type="button" className="link" disabled={disabled} onClick={() => set({ patienceMs: suggestedPatienceMs(config) })}>
+              Usar a sugerida
+            </button>
+          </p>
+        )}
 
         <h3>Tipos de operação (% da fila)</h3>
         <div className="mix-grid">
@@ -154,7 +164,7 @@ export function ConfigPanel(props: Props) {
                   type="button"
                   className={scenario.id === id ? 'link link-active' : 'link'}
                   disabled={disabled}
-                  onClick={() => onChange(scenario.config)}
+                  onClick={() => onChange(sanitizeConfig(scenario.config))}
                   title="Carregar este cenário"
                 >
                   {scenario.name}

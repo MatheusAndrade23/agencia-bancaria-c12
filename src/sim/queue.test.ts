@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG, PRESETS, generateQueue, sanitizeConfig, scenarioId } from './queue'
+import { DEFAULT_CONFIG, PRESETS, generateQueue, sanitizeConfig, scenarioId, suggestedPatienceMs } from './queue'
 import { mulberry32 } from './rng'
-import { OP_TRANSFER } from './types'
+import { KIND_ELDERLY, KIND_INFANT, KIND_NONE, OP_TRANSFER } from './types'
 
 describe('mulberry32', () => {
   it('a mesma seed gera a mesma sequência', () => {
@@ -92,5 +92,32 @@ describe('cenário', () => {
     expect(config.tellers).toBe(8)
     expect(config.accounts).toBe(2)
     expect(config.clients).toBe(1)
+  })
+})
+
+describe('tipos de preferencial e paciência', () => {
+  it('só preferenciais são idosos ou estão com criança de colo, e a mesma seed repete o sorteio', () => {
+    const queue = generateQueue({ ...DEFAULT_CONFIG, clients: 200 })
+    expect(queue.every((c) => (c.priority === 0) === (c.kind === KIND_NONE))).toBe(true)
+    expect(queue.some((c) => c.kind === KIND_ELDERLY)).toBe(true)
+    expect(queue.some((c) => c.kind === KIND_INFANT)).toBe(true)
+    expect(generateQueue({ ...DEFAULT_CONFIG, clients: 200 }).map((c) => c.kind)).toEqual(queue.map((c) => c.kind))
+  })
+
+  it('o sorteio do tipo não muda os campos que já existiam', () => {
+    const rand = mulberry32(DEFAULT_CONFIG.seed)
+    const first = generateQueue(DEFAULT_CONFIG)[0]
+    const draws = Array.from({ length: 7 }, () => rand())
+    expect(first.priority).toBe(draws[1] * 100 < DEFAULT_CONFIG.preferentialPct ? 1 : 0)
+  })
+
+  it('a paciência sugerida vale cerca de 4 atendimentos médios', () => {
+    expect(DEFAULT_CONFIG.patienceMs).toBe(520) // (114 ms + 15 ms) × 4
+    expect(suggestedPatienceMs({ ...DEFAULT_CONFIG, durationScalePct: 200 })).toBe(970) // (228 ms + 15 ms) × 4
+  })
+
+  it('cenários antigos, sem paciência, recebem a sugerida', () => {
+    const { patienceMs: _, ...old } = DEFAULT_CONFIG
+    expect(sanitizeConfig(old as typeof DEFAULT_CONFIG).patienceMs).toBe(520)
   })
 })

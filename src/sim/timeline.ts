@@ -3,12 +3,13 @@
 // lenta, voltar no tempo e reabrir execuções salvas sem interferir no benchmark.
 
 import {
-  C_ACQ1, C_ACQ2, C_END, C_LOCK1, C_LOCK2, C_RELEASE, C_RESULT, C_START, C_STATUS, C_TELLER,
-  C_WAIT1, C_WAIT2, CLIENT_WAITING, T_LOG_COUNT,
+  C_ACQ1, C_ACQ2, C_END, C_FLOOR, C_GAVE_UP, C_LOCK1, C_LOCK2, C_RELEASE, C_RESULT, C_SICK, C_START,
+  C_STATUS, C_TELLER, C_WAIT1, C_WAIT2, CLIENT_DONE, CLIENT_TAKEN, T_LOG_COUNT,
   type Layout,
 } from './layout'
+import { eventAt, patienceUs } from './satisfaction'
 import {
-  OP_TRANSFER,
+  KIND_ELDERLY, KIND_INFANT, OP_TRANSFER,
   type Client, type ClientTrace, type DeadlockInfo, type PackedTimeline, type ScenarioConfig,
   type Timeline, type WriteEntry,
 } from './types'
@@ -18,7 +19,8 @@ export function snapshotTimeline(mem: Int32Array, layout: Layout, endUs: number,
   const clients: ClientTrace[] = []
   for (let i = 0; i < layout.clients; i++) {
     const base = layout.client(i)
-    const taken = Atomics.load(mem, base + C_STATUS) !== CLIENT_WAITING
+    const status = Atomics.load(mem, base + C_STATUS)
+    const taken = status === CLIENT_TAKEN || status === CLIENT_DONE
     clients.push({
       teller: taken ? Atomics.load(mem, base + C_TELLER) : -1,
       startUs: taken ? Atomics.load(mem, base + C_START) : 0,
@@ -31,6 +33,9 @@ export function snapshotTimeline(mem: Int32Array, layout: Layout, endUs: number,
       wait2Us: Atomics.load(mem, base + C_WAIT2),
       acq2Us: Atomics.load(mem, base + C_ACQ2),
       releaseUs: Atomics.load(mem, base + C_RELEASE),
+      gaveUpUs: Atomics.load(mem, base + C_GAVE_UP),
+      sickUs: Atomics.load(mem, base + C_SICK),
+      floorUs: Atomics.load(mem, base + C_FLOOR),
     })
   }
 
@@ -50,22 +55,43 @@ export function snapshotTimeline(mem: Int32Array, layout: Layout, endUs: number,
   return { endUs, clients, writes, balances, finished }
 }
 
-const TRACE_FIELDS = 11
+/**
+ * Fecha a fila de uma execução que não terminou (deadlock ou parada): quem esperou além da
+ * paciência até o fim teria ido embora, e os eventos que já teriam acontecido são registrados.
+ */
+export function closeQueue(timeline: Timeline, clients: Client[], patience: number): void {
+  timeline.clients.forEach((trace, i) => {
+    const client = clients[i]
+    if (!client || trace.startUs > 0 || trace.gaveUpUs > 0 || client.arrivalUs > timeline.endUs) return
+    const waitEndUs = Math.min(timeline.endUs, client.arrivalUs + patience)
+    trace.sickUs ||= eventAt(client, KIND_ELDERLY, patience, waitEndUs)
+    trace.floorUs ||= eventAt(client, KIND_INFANT, patience, waitEndUs)
+    if (client.arrivalUs + patience <= timeline.endUs) trace.gaveUpUs = client.arrivalUs + patience
+  })
+}
+
+const TRACE_FIELDS = 14
+/** execuções salvas antes da desistência têm 11 campos por cliente */
+const LEGACY_TRACE_FIELDS = 11
 
 export function packTimeline(timeline: Timeline): PackedTimeline {
   const c: number[] = []
   for (const t of timeline.clients) {
-    c.push(t.teller, t.startUs, t.endUs, t.result, t.lock1, t.wait1Us, t.acq1Us, t.lock2, t.wait2Us, t.acq2Us, t.releaseUs)
+    c.push(
+      t.teller, t.startUs, t.endUs, t.result, t.lock1, t.wait1Us, t.acq1Us, t.lock2, t.wait2Us, t.acq2Us, t.releaseUs,
+      t.gaveUpUs, t.sickUs, t.floorUs,
+    )
   }
-  return { endUs: timeline.endUs, c, w: timeline.writes.flat(), b: timeline.balances }
+  return { endUs: timeline.endUs, c, f: TRACE_FIELDS, w: timeline.writes.flat(), b: timeline.balances }
 }
 
 export function unpackTimeline(packed: PackedTimeline): Timeline {
   const clients: ClientTrace[] = []
-  for (let i = 0; i + TRACE_FIELDS <= packed.c.length; i += TRACE_FIELDS) {
-    const [teller, startUs, endUs, result, lock1, wait1Us, acq1Us, lock2, wait2Us, acq2Us, releaseUs] =
-      packed.c.slice(i, i + TRACE_FIELDS)
-    clients.push({ teller, startUs, endUs, result, lock1, wait1Us, acq1Us, lock2, wait2Us, acq2Us, releaseUs })
+  const fields = packed.f ?? LEGACY_TRACE_FIELDS
+  for (let i = 0; i + fields <= packed.c.length; i += fields) {
+    const [teller, startUs, endUs, result, lock1, wait1Us, acq1Us, lock2, wait2Us, acq2Us, releaseUs, gaveUpUs = 0, sickUs = 0, floorUs = 0] =
+      packed.c.slice(i, i + fields)
+    clients.push({ teller, startUs, endUs, result, lock1, wait1Us, acq1Us, lock2, wait2Us, acq2Us, releaseUs, gaveUpUs, sickUs, floorUs })
   }
   const writes: WriteEntry[] = []
   for (let i = 0; i + 4 <= packed.w.length; i += 4) {
@@ -100,6 +126,10 @@ export interface AccountView {
 export interface QueueItemView {
   client: number
   waitUs: number
+  /** idoso que já passou mal */
+  sick: boolean
+  /** criança de colo já colocada no chão */
+  floor: boolean
 }
 
 export interface TransferFx {
@@ -120,6 +150,8 @@ export interface AgencyView {
   notArrived: number
   done: number
   refused: number
+  /** clientes que já foram embora sem ser atendidos */
+  gaveUp: number
   expectedTotal: number
   realTotal: number
   transfers: TransferFx[]
@@ -172,6 +204,8 @@ export function viewAt(
   let notArrived = 0
   let done = 0
   let refused = 0
+  let gaveUp = 0
+  const patience = patienceUs(config)
 
   timeline.clients.forEach((trace, i) => {
     const client = clients[i]
@@ -181,7 +215,18 @@ export function viewAt(
       return
     }
     if (trace.startUs === 0 || trace.startUs > tUs) {
-      queue.push({ client: i, waitUs: tUs - client.arrivalUs })
+      // ao vivo, quem passou da paciência já foi embora mesmo antes de um caixa varrer a fila
+      const giveUpAt = trace.gaveUpUs || (trace.startUs === 0 ? client.arrivalUs + patience : 0)
+      if (giveUpAt > 0 && giveUpAt <= tUs) {
+        gaveUp++
+        return
+      }
+      queue.push({
+        client: i,
+        waitUs: tUs - client.arrivalUs,
+        sick: eventAt(client, KIND_ELDERLY, patience, tUs) > 0,
+        floor: eventAt(client, KIND_INFANT, patience, tUs) > 0,
+      })
       return
     }
     const teller = tellers[trace.teller]
@@ -242,6 +287,7 @@ export function viewAt(
     notArrived,
     done,
     refused,
+    gaveUp,
     expectedTotal: accounts.reduce((sum, a) => sum + a.expected, 0),
     realTotal: accounts.reduce((sum, a) => sum + a.balance, 0),
     transfers,

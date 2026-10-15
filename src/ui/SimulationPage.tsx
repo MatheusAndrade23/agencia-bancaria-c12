@@ -11,7 +11,7 @@ import { Cofres } from './Cofres'
 import { DeadlockPanel } from './DeadlockPanel'
 import { Fila } from './Fila'
 import { Gantt } from './Gantt'
-import { LittlePanel, MetricsSummary, StatusBadge } from './MetricsSummary'
+import { LittlePanel, MetricsSummary, SatisfactionPanel, StatusBadge } from './MetricsSummary'
 import { Palco } from './Palco'
 import { Icon } from './icons'
 import { formatMs } from './theme'
@@ -94,7 +94,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
 
   // antes da primeira execução, o palco mostra a agência vazia
   const idleFrame = useMemo<Frame>(() => {
-    const blank: ClientTrace = { teller: -1, startUs: 0, endUs: 0, result: 0, lock1: -1, wait1Us: 0, acq1Us: 0, lock2: -1, wait2Us: 0, acq2Us: 0, releaseUs: 0 }
+    const blank: ClientTrace = { teller: -1, startUs: 0, endUs: 0, result: 0, lock1: -1, wait1Us: 0, acq1Us: 0, lock2: -1, wait2Us: 0, acq2Us: 0, releaseUs: 0, gaveUpUs: 0, sickUs: 0, floorUs: 0 }
     const timeline: Timeline = {
       endUs: 0,
       clients: clients.map(() => blank),
@@ -326,7 +326,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
           tUs={current.tUs}
           fxUs={current.fxUs}
           deadlock={deadlock}
-          summary={record && atEnd && record.status === 'completed' ? <LittlePanel run={record} compact /> : undefined}
+          summary={record && atEnd && record.status === 'completed' ? <><SatisfactionPanel run={record} /><LittlePanel run={record} compact /></> : undefined}
           header={
             playbackInfo ?? (
               <div className="playback-info">

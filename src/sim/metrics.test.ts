@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { computeMetrics, meanAndSd } from './metrics'
 import { DEFAULT_CONFIG } from './queue'
-import { packTimeline, unpackTimeline, viewAt } from './timeline'
+import { clientScore, moodLevel, percentile, timeScore, type ScoreInput } from './satisfaction'
+import { closeQueue, packTimeline, unpackTimeline, viewAt } from './timeline'
 import type { Client, ClientTrace, ScenarioConfig, Timeline } from './types'
 
 const config: ScenarioConfig = { ...DEFAULT_CONFIG, tellers: 2, accounts: 2, initialBalance: 1000, clients: 2 }
 const clients: Client[] = [
-  { id: 0, arrivalUs: 0, priority: 1, op: 0, from: 0, to: -1, amount: 500, durationUs: 10_000 },
-  { id: 1, arrivalUs: 10_000, priority: 0, op: 2, from: 0, to: 1, amount: 200, durationUs: 20_000 },
+  { id: 0, arrivalUs: 0, priority: 1, op: 0, from: 0, to: -1, amount: 500, durationUs: 10_000, kind: 1 },
+  { id: 1, arrivalUs: 10_000, priority: 0, op: 2, from: 0, to: 1, amount: 200, durationUs: 20_000, kind: 0 },
 ]
 const trace = (partial: Partial<ClientTrace>): ClientTrace => ({
-  teller: -1, startUs: 0, endUs: 0, result: 0, lock1: -1, wait1Us: 0, acq1Us: 0, lock2: -1, wait2Us: 0, acq2Us: 0, releaseUs: 0,
+  teller: -1, startUs: 0, endUs: 0, result: 0, lock1: -1, wait1Us: 0, acq1Us: 0, lock2: -1, wait2Us: 0, acq2Us: 0, releaseUs: 0, gaveUpUs: 0, sickUs: 0, floorUs: 0,
   ...partial,
 })
 const timeline: Timeline = {
@@ -98,5 +99,75 @@ describe('timeline', () => {
     const later = viewAt(config, clients, timeline, 70_000, undefined, 0)
     expect(later.accounts[0].owner).toBe(1)
     expect(later.done).toBe(1)
+  })
+})
+
+describe('satisfação', () => {
+  // o exemplo aprovado: P = 500 ms, tolerância de 125 ms
+  const P = 500_000
+  const score = (waitMs: number, extra: Partial<ScoreInput> = {}) =>
+    clientScore({ waitUs: waitMs * 1000, gaveUp: false, sick: false, floor: false, refused: false, wrongMoney: false, ...extra }, P)
+
+  it('nota do tempo: cheia até a tolerância e queda linear até a paciência', () => {
+    expect(timeScore(80_000, P)).toBe(1)
+    expect(timeScore(125_000, P)).toBe(1)
+    expect(timeScore(200_000, P)).toBeCloseTo(0.8)
+    expect(timeScore(500_000, P)).toBe(0)
+    expect(timeScore(700_000, P)).toBe(0)
+  })
+
+  it('reproduz o exemplo de 10 clientes: índice 53,3', () => {
+    const scores = [
+      score(80),
+      score(200),
+      score(350),
+      score(500, { gaveUp: true }),
+      score(320, { sick: true }),
+      score(250, { floor: true }),
+      score(100, { refused: true }),
+      score(150, { wrongMoney: true }),
+      score(60),
+      score(400),
+    ]
+    expect(scores.map((s) => Math.round(s * 1000) / 1000)).toEqual([1, 0.8, 0.4, 0, 0, 0.6, 0.8, 0.467, 1, 0.267])
+    const index = (scores.reduce((a, b) => a + b, 0) / scores.length) * 100
+    expect(index).toBeCloseTo(53.33, 1)
+    expect(percentile(scores, 50) * 100).toBeCloseTo(53.33, 1)
+    expect(percentile(scores, 10)).toBe(0)
+  })
+
+  it('humor na escala do palco, com média, mediana e percentil 90', () => {
+    const moods = [80, 200, 350, 500, 320, 250, 100, 150, 60, 400].map((w) => moodLevel(w / 500))
+    expect(moods).toEqual([0, 1, 2, 4, 2, 1, 0, 1, 0, 2])
+    expect(percentile(moods, 50)).toBe(1)
+    expect(percentile(moods, 90)).toBeCloseTo(2.2)
+  })
+
+  it('quem passa da paciência sem ser chamado desiste e o idoso passa mal antes', () => {
+    const patienceConfig = { ...config, patienceMs: 50 }
+    const waiting: Timeline = {
+      ...timeline,
+      endUs: 200_000,
+      clients: [trace({}), trace({ teller: 0, startUs: 40_000, endUs: 100_000, result: 1 })],
+    }
+    closeQueue(waiting, clients, 50_000)
+    expect(waiting.clients[0].gaveUpUs).toBe(50_000)
+    expect(waiting.clients[0].sickUs).toBe(30_000) // idoso: 60% da paciência
+    const m = computeMetrics(patienceConfig, clients, waiting)
+    expect(m.gaveUp).toBe(1)
+    expect(m.gaveUpPref).toBe(1)
+    expect(m.elderlySick).toBe(1)
+    expect(m.served).toBe(1)
+    // o comum esperou 30 ms de 50: (50 − 30) / 37,5
+    expect(m.satisfactionCommon).toBeCloseTo((20 / 37.5) * 100)
+    expect(m.satisfaction).toBeCloseTo(((20 / 37.5) * 100) / 2)
+    expect(viewAt(patienceConfig, clients, waiting, 60_000, undefined, 0).gaveUp).toBe(1)
+  })
+
+  it('conta movimentada com saldo errado derruba a nota pela metade', () => {
+    const ok = computeMetrics(config, clients, timeline)
+    expect(ok.satisfaction).toBe(100)
+    const wrong = computeMetrics(config, clients, { ...timeline, balances: [800, 1200] })
+    expect(wrong.satisfaction).toBe(50)
   })
 })

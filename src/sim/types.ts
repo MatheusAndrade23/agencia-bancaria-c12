@@ -67,8 +67,17 @@ export interface ScenarioConfig {
   durationScalePct: number
   /** no aging, a cada `agingMs` de espera o cliente ganha 1 nível de prioridade */
   agingMs: number
+  /** quanto um cliente aguenta esperar na fila antes de ir embora, em ms */
+  patienceMs: number
   seed: number
 }
+
+/** Tipo de cliente preferencial: comum, idoso ou pessoa com criança de colo. */
+export const KIND_NONE = 0
+export const KIND_ELDERLY = 1
+export const KIND_INFANT = 2
+export type ClientKind = 0 | 1 | 2
+export const KIND_LABEL: Record<ClientKind, string> = { 0: 'Comum', 1: 'Idoso', 2: 'Com criança de colo' }
 
 export interface Client {
   id: number
@@ -84,6 +93,8 @@ export interface Client {
   amount: number
   /** duração estimada do atendimento, em microssegundos */
   durationUs: number
+  /** só preferenciais: idoso ou com criança de colo (comuns = KIND_NONE) */
+  kind: ClientKind
 }
 
 export type RunStatus = 'completed' | 'deadlock' | 'stopped'
@@ -112,6 +123,12 @@ export interface ClientTrace {
   wait2Us: number
   acq2Us: number
   releaseUs: number
+  /** instante em que desistiu da fila (chegada + paciência; 0 = não desistiu) */
+  gaveUpUs: number
+  /** instante em que o idoso passou mal (0 = não passou) */
+  sickUs: number
+  /** instante em que a criança foi colocada no chão (0 = não foi) */
+  floorUs: number
 }
 
 /** Uma escrita de saldo: [tempoUs, conta, novoSaldo, deltaEsperado]. */
@@ -173,6 +190,27 @@ export interface Metrics {
   littleL?: number
   /** Lq = λ·Wq: número médio de clientes na fila (Teorema de Little) */
   littleLq?: number
+  // --- comportamento da fila e satisfação (ausentes em execuções antigas) ---
+  patienceMs?: number
+  /** clientes que foram embora sem ser atendidos */
+  gaveUp?: number
+  gaveUpPref?: number
+  gaveUpCommon?: number
+  /** idosos que passaram mal na fila */
+  elderlySick?: number
+  /** crianças de colo colocadas no chão */
+  infantFloor?: number
+  /** humor no momento em que o cliente é chamado ou desiste: 0 feliz, 1 neutro, 2 entediado, 3 irritado, 4 furioso */
+  moodAvg?: number
+  moodMedian?: number
+  moodP90?: number
+  /** índice de satisfação: 100 × média das notas (0 a 1) dos clientes */
+  satisfaction?: number
+  satisfactionMedian?: number
+  /** nota dos 10% piores clientes (percentil 10), × 100 */
+  satisfactionP10?: number
+  satisfactionPref?: number
+  satisfactionCommon?: number
 }
 
 export interface RunRecord {
@@ -193,6 +231,8 @@ export interface RunRecord {
 export interface PackedTimeline {
   endUs: number
   c: number[]
+  /** campos por cliente em `c` (11 nas execuções antigas, sem desistência e eventos) */
+  f?: number
   w: number[]
   b: number[]
 }

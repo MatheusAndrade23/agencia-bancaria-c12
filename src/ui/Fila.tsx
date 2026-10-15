@@ -30,6 +30,7 @@ export function Fila({ clients, view }: Props) {
         <h2>Fila</h2>
         <span className="muted">
           {view.queue.length} esperando · {view.notArrived} a caminho · {view.done} atendidos
+          {view.gaveUp > 0 && ` · ${view.gaveUp} desistiram`}
         </span>
       </header>
       <div className="queue">
@@ -41,7 +42,7 @@ export function Fila({ clients, view }: Props) {
             <div key={client.id} className={`queue-card op-${op.key}`}>
               <div className="queue-card-top">
                 <span className="queue-id">#{client.id}</span>
-                {client.priority === 1 && <span className="badge-pref-full"><PrefStar size={11} /> Pref.</span>}
+                {client.priority === 1 && <span className="badge-pref-full"><PrefStar size={11} /> {client.kind === 1 ? 'Idoso' : 'Criança'}</span>}
               </div>
               <div className="queue-op">
                 <OpIcon op={op.key} size={18} /> {op.label}
@@ -50,7 +51,11 @@ export function Fila({ clients, view }: Props) {
                 {formatMoney(client.amount)} · {accountName(client.from)}
                 {client.to >= 0 ? ` → ${accountName(client.to)}` : ''}
               </div>
-              <div className="queue-wait"><Icon name="clock" size={12} /> {formatMs(item.waitUs / 1000)}</div>
+              <div className="queue-wait">
+                <Icon name="clock" size={12} /> {formatMs(item.waitUs / 1000)}
+                {item.sick && <span className="bad"> · passou mal</span>}
+                {item.floor && <span className="muted"> · criança no chão</span>}
+              </div>
             </div>
           )
         })}

@@ -90,7 +90,7 @@ Presets prontos:
 - Padrão: mistura de operações, 4 caixas e 5 contas.
 - Corrida: muitas transferências sobre 3 contas, para mostrar a race condition.
 - Deadlock: 2 contas e 100% de transferências cruzadas (A→B e B→A).
-- Starvation: metade dos clientes é preferencial e a fila nunca esvazia.
+- Starvation: dois terços dos clientes são preferenciais e a fila nunca esvazia. Com Prioridade, os comuns desistem e algumas crianças de colo vão para o chão.
 
 ### Câmera lenta sem alterar o benchmark
 
@@ -100,9 +100,83 @@ A execução acontece em tempo real, na velocidade das threads. Os workers regis
 
 Na aba Simulação, a opção Tela cheia troca os painéis por um palco. As pessoas entram pela porta, esperam na fila, andam até o caixa e saem. O dinheiro anda entre os cofres e os caixas, e uma linha liga cada caixa ao cadeado que ele tem (contínua) ou espera (tracejada). `Esc` volta à visualização normal.
 
-Cada pessoa na fila tem uma barra de paciência e um rosto que vai do sorriso à fúria conforme a espera aumenta. A paciência vale quatro atendimentos médios do cenário. O painel Starvation, no topo, mostra a maior espera do momento, quantos clientes estão irritados e a espera média de preferenciais e comuns.
+Cada pessoa na fila tem uma barra de paciência e um rosto que vai do sorriso à fúria conforme a espera aumenta. Quem esgota a paciência sai pela porta. O idoso que passa mal fica tonto e curvado, com a bengala no chão, e a criança colocada no chão aparece sentada ao lado do responsável. O painel Starvation, no topo, mostra a maior espera do momento, quantos clientes estão irritados e a espera média de preferenciais e comuns. O painel Satisfação mostra o índice ao vivo, o humor médio, as desistências e os eventos até o instante exibido.
 
 Todos os personagens e ícones são SVG desenhados no próprio app, sem emoji.
+
+## Comportamento humano na fila
+
+### Paciência e desistência
+
+Cada cenário tem uma paciência P, em ms. O valor sugerido equivale a quatro atendimentos médios: a duração esperada pela mistura de operações, mais a janela crítica. Ao escolher um preset, a paciência já vem com esse valor, e o painel de configuração avisa quando ela foi alterada e oferece voltar à sugerida.
+
+Quem espera P sem ser chamado desiste e vai embora sem ser atendido. Isso acontece na simulação real, dentro do worker: toda vez que um caixa varre a fila com o lock da fila, ele marca como desistente quem já passou da paciência (status `CLIENT_GAVE_UP` na memória compartilhada) e registra o instante da desistência como chegada + P. Como o caixa só olha a fila quando fica livre, o registro usa o instante exato em que a paciência acabou, e não o da varredura. Se a execução termina em deadlock ou é interrompida, quem ficou na fila além de P também conta como desistente. Uma fila que termina com desistentes conta como execução concluída.
+
+### Preferenciais: idosos e crianças de colo
+
+Cada preferencial é sorteado como idoso (60%) ou pessoa com criança de colo (40%). O sorteio usa um gerador separado, `mulberry32(seed ^ 0x9e3779b9)`, então os demais campos das filas que já existiam continuam iguais para a mesma seed.
+
+| Evento | Quando acontece |
+|---|---|
+| idoso passa mal | ao completar 60% de P esperando |
+| criança é colocada no chão | ao completar 40% de P esperando |
+
+O caixa registra o instante de cada evento (chegada + fração de P) na mesma varredura da fila.
+
+### Humor
+
+O humor de cada cliente é medido no instante em que ele é chamado ou desiste, pela fração da paciência que já gastou, na mesma escala dos rostos do palco:
+
+| Nível | Humor | Espera |
+|---|---|---|
+| 0 | feliz | abaixo de 0,3·P |
+| 1 | neutro | abaixo de 0,6·P |
+| 2 | entediado | abaixo de 0,85·P |
+| 3 | irritado | abaixo de P |
+| 4 | furioso | P ou mais |
+
+As métricas trazem a média, a mediana e o percentil 90 do humor. O P90 mostra como estão os 10% mais irritados.
+
+### Índice de satisfação
+
+Cada cliente recebe uma nota de 0 a 1:
+
+1. Tempo: nota 1 até a tolerância T = 0,25·P. Depois cai em linha reta até 0 quando a espera chega a P:
+
+   ```
+   notaTempo = 1                       se espera ≤ T
+   notaTempo = (P − espera) / (P − T)  se T < espera < P
+   ```
+
+2. Dinheiro: se alguma conta que o cliente movimentou terminou com saldo errado (race condition no modo sem lock), a nota é multiplicada por 0,5.
+3. Operação recusada por saldo insuficiente: a nota é multiplicada por 0,8.
+4. Criança colocada no chão: a nota fica limitada a 0,6.
+5. Desistiu, ou idoso que passou mal: nota 0.
+
+```
+índice = 100 × média das notas
+```
+
+Ao lado do índice ficam a mediana e o percentil 10 (a nota dos 10% piores clientes), além do índice só dos preferenciais e só dos comuns. O dinheiro inconsistente total não pesa no índice uma segunda vez: a nota de cada cliente já cai quando a conta dele termina errada.
+
+Exemplo com P = 500 ms (T = 125 ms):
+
+| Cliente | Espera | O que aconteceu | Nota | Humor |
+|---|---|---|---|---|
+| comum | 80 ms | | 1,00 | feliz |
+| comum | 200 ms | | 0,80 | neutro |
+| comum | 350 ms | | 0,40 | entediado |
+| comum | 500 ms | desistiu | 0 | furioso |
+| idoso | 320 ms | passou mal aos 300 ms | 0 | entediado |
+| com criança | 250 ms | criança no chão aos 200 ms; o tempo daria 0,67 | 0,60 | neutro |
+| comum | 100 ms | saque recusado | 0,80 | feliz |
+| comum | 150 ms | conta terminou errada: 0,93 × 0,5 | 0,47 | neutro |
+| idoso | 60 ms | | 1,00 | feliz |
+| comum | 400 ms | | 0,27 | entediado |
+
+Índice 53,3, mediana 53,3 e P10 igual a 0. Humor médio 1,3, mediana neutro e P90 2,2 (entediado). O teste `reproduz o exemplo de 10 clientes` em `src/sim/metrics.test.ts` confere essas contas.
+
+O índice aparece no resumo da execução, na tabela, na matriz e nos gráficos da aba Comparações, junto com as desistências e os eventos. Execuções salvas por versões anteriores não têm essas métricas e aparecem com "-".
 
 ## Algoritmos de escalonamento
 
@@ -183,7 +257,7 @@ Ao detectar, o app encerra os workers, destaca em vermelho os caixas e as contas
 
 ## Métricas
 
-Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
+Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little, desistências, idosos que passaram mal, crianças no chão, humor (média, mediana e P90), índice de satisfação (média, mediana, P10, preferenciais e comuns) e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
 
 ### Teorema de Little e estabilidade
 
@@ -210,10 +284,10 @@ Aqui λ é a vazão efetiva da execução inteira (clientes atendidos ÷ makespa
 
 1. Conhecer a fila. Na aba Cenário e fila, escolha o preset Padrão e mostre as pessoas chegando, o ritmo de chegada contra a capacidade dos caixas e o que cada cliente veio fazer.
 2. Conhecer a simulação. Na aba Simulação, escolha FCFS e lock por cofre ordenado, velocidade 0,1x, e clique em Iniciar. Acompanhe a fila, os caixas, os cadeados nos cofres e o Gantt. A invariante fica verde até o fim.
-3. Race condition. Preset Corrida, modo Sem lock. O painel da invariante fica vermelho no meio da execução e os cofres mostram "deveria ser R$ ...". Rodando de novo, o valor inconsistente muda, porque depende de como o sistema operacional intercala as threads.
+3. Race condition. Preset Corrida, modo Sem lock. O painel da invariante fica vermelho no meio da execução e os cofres mostram "deveria ser R$ ...". O índice de satisfação cai, porque quem movimentou uma conta que terminou errada perde metade da nota. Rodando de novo, o valor inconsistente muda, porque depende de como o sistema operacional intercala as threads.
 4. Corrigir com lock. Mesmo cenário com Lock global e depois Por cofre (ordenado). Os dois fecham a invariante em zero. Compare o makespan e o tempo esperando lock: o global serializa todos os caixas e o por cofre deixa contas diferentes andarem em paralelo.
 5. Deadlock. Preset Deadlock, modo Por cofre (sem ordem). Em frações de segundo os caixas travam e o app desenha o ciclo, onde dá para apontar as quatro condições de Coffman. No modo ordenado, o mesmo cenário termina normalmente.
-6. Starvation e aging. Preset Starvation, com Prioridade e depois com Prioridade + Aging. No gráfico de preferenciais e comuns, a espera dos comuns cai com o aging e a dos preferenciais sobe um pouco. Vale abrir a tela cheia para ver os rostos irritados.
+6. Starvation e aging. Preset Starvation, com Prioridade e depois com Prioridade + Aging. Com Prioridade, os preferenciais quase não esperam e os comuns desistem. Com aging, menos comuns desistem e o índice de satisfação dos comuns sobe; em troca, os preferenciais esperam mais, idosos passam mal e o índice geral cai. O gráfico de satisfação de preferenciais e comuns mostra essa troca. Vale abrir a tela cheia para ver os rostos irritados e quem sai pela porta.
 7. Visão geral. Clique em Rodar as 16 combinações em cada preset. Na aba Comparações, escolha o cenário e analise a matriz algoritmo × sincronismo (as células de deadlock ficam marcadas), os quatro gráficos de barras e duas a quatro execuções lado a lado, com os Gantts.
 8. Repetibilidade. Rode a mesma combinação várias vezes. A fila é idêntica, os tempos variam um pouco e a inconsistência do sem lock varia muito. A matriz e os gráficos passam a mostrar média e desvio padrão.
 
@@ -231,6 +305,7 @@ src/
     watchdog.ts     grafo de espera e detecção de deadlock
     timeline.ts     registro da execução e estado da agência em um instante
     metrics.ts      cálculo das métricas
+    satisfaction.ts paciência, eventos, humor e índice de satisfação
     engine.ts       sobe os workers, roda o watchdog e monta o resultado
     *.test.ts       testes unitários
   workers/

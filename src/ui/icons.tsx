@@ -8,7 +8,7 @@ export type IconName =
   | 'lock' | 'unlock' | 'hourglass' | 'skull' | 'star' | 'check' | 'x' | 'alert'
   | 'play' | 'stop' | 'pause' | 'forward' | 'replay' | 'skip' | 'fullscreen' | 'edit' | 'trash'
   | 'arrow-right' | 'clock' | 'users' | 'vault' | 'banknote' | 'chevron-up' | 'chevron-down' | 'gauge'
-  | 'sun' | 'moon'
+  | 'sun' | 'moon' | 'door' | 'baby' | 'smile'
 
 const PATHS: Record<IconName, ReactNode> = {
   // operações
@@ -167,6 +167,28 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M6 9.5v5M18 9.5v5" />
     </>
   ),
+  door: (
+    <>
+      <path d="M5 21V4a1 1 0 0 1 1-1h9v18" />
+      <path d="M3 21h18" />
+      <path d="M15 3l4 2v16" />
+      <path d="M12 12h.01" />
+    </>
+  ),
+  baby: (
+    <>
+      <circle cx="12" cy="7" r="3.5" />
+      <path d="M6 21v-2a6 6 0 0 1 12 0v2z" />
+      <path d="M11 6.5h.01M13 6.5h.01" />
+    </>
+  ),
+  smile: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 14a4.5 4.5 0 0 0 7 0" />
+      <path d="M9 9.5h.01M15 9.5h.01" />
+    </>
+  ),
   'chevron-up': <path d="m6 15 6-6 6 6" />,
   'chevron-down': <path d="m6 9 6 6 6-6" />,
   gauge: (
@@ -238,6 +260,13 @@ export function LogoMark({ size = 32, color = 'currentColor' }: { size?: number;
 // ---------------------------------------------------------------------------
 
 export type Mood = 'happy' | 'calm' | 'neutral' | 'bored' | 'angry' | 'furious' | 'tense' | 'dizzy' | 'sad' | 'sleep'
+
+/** Rosto de cada nível de humor (0 feliz a 4 furioso), na escala do palco. */
+export const MOOD_FACES: Mood[] = ['happy', 'neutral', 'bored', 'angry', 'furious']
+
+export function moodFace(level: number): Mood {
+  return MOOD_FACES[Math.max(0, Math.min(4, Math.round(level)))]
+}
 
 const MOOD_FILL: Record<Mood, string> = {
   happy: '#ffd166',
@@ -320,14 +349,88 @@ export function Face({ mood, size = 28, className }: { mood: Mood; size?: number
   )
 }
 
-/** Cliente: rosto com o humor do momento e o corpo na cor da operação. */
-export function Person({ mood, color, preferential, size = 44 }: { mood: Mood; color: string; preferential?: boolean; size?: number }) {
-  return (
-    <svg viewBox="-16 -15 32 44" width={(size * 32) / 44} height={size} aria-hidden className="person-svg">
-      <path d="M-11 28v-6a11 11 0 0 1 22 0v6z" strokeWidth={1.2} style={{ fill: color, stroke: 'var(--surface)' }} />
-      <g transform="translate(0 0)">
-        <FaceShape mood={mood} />
+const SKIN = '#f2c9a0'
+
+/** Criança pequena: no colo (enrolada na manta) ou sentada no chão. */
+function Baby({ onFloor }: { onFloor?: boolean }) {
+  const ink = '#3b2a1a'
+  if (!onFloor) {
+    return (
+      <g transform="translate(-4 14)">
+        <rect x={-5} y={-3} width={11} height={7} rx={3.5} fill="#bfe0ff" stroke="#6a9ccc" strokeWidth={0.8} />
+        <circle cx={-4} cy={-1.5} r={3.6} fill={SKIN} stroke={ink} strokeOpacity={0.35} strokeWidth={0.7} />
+        <path d="M-5.3-1.8h.01M-2.9-1.8h.01" stroke={ink} strokeWidth={1} strokeLinecap="round" />
       </g>
+    )
+  }
+  // sentada no chão, chorando
+  return (
+    <g transform="translate(-21 21)" stroke={ink} strokeLinecap="round">
+      <path d="M-5 7q0-7 5-7t5 7z" fill="#bfe0ff" strokeOpacity={0.4} strokeWidth={0.8} />
+      <circle cy={-4.5} r={4.6} fill={SKIN} strokeOpacity={0.35} strokeWidth={0.7} />
+      <path d="M-2.4-5.6q.8-.8 1.6 0M.8-5.6q.8-.8 1.6 0" fill="none" strokeWidth={0.9} />
+      <ellipse cy={-2.2} rx={1.2} ry={1} fill={ink} stroke="none" />
+      <path d="M-2.6-4.2v2.4M2.6-4.2v2.4" stroke="#5aa9e6" strokeWidth={1.1} />
+    </g>
+  )
+}
+
+/** Cabelo branco do idoso. */
+function WhiteHair() {
+  return (
+    <path
+      d="M-10.4-1.5a10.4 10.4 0 0 1 20.8 0c-2-3-4-4.6-6-4.6-1.4 1.2-2.8 1.2-4.2 0-1.4 1.2-2.8 1.2-4.2 0-2 0-4.4 1.6-6.4 4.6z"
+      fill="#ececec"
+      stroke="#9a9a9a"
+      strokeWidth={0.7}
+    />
+  )
+}
+
+/** Bengala: em pé ao lado do idoso, ou caída no chão quando ele passa mal. */
+function Cane({ fallen }: { fallen?: boolean }) {
+  return fallen ? (
+    <path d="M4 28.4h12q2 0 2-2" fill="none" stroke="#7a5230" strokeWidth={2} strokeLinecap="round" />
+  ) : (
+    <path d="M13 28V14q0-3 3-3" fill="none" stroke="#7a5230" strokeWidth={2} strokeLinecap="round" />
+  )
+}
+
+export interface PersonProps {
+  mood: Mood
+  color: string
+  preferential?: boolean
+  /** 0 comum, 1 idoso, 2 com criança de colo */
+  kind?: number
+  /** idoso que passou mal: tonto, curvado, com a bengala no chão */
+  sick?: boolean
+  /** criança colocada no chão ao lado do responsável */
+  floor?: boolean
+  size?: number
+}
+
+/** Cliente: rosto com o humor do momento e o corpo na cor da operação. */
+export function Person({ mood, color, preferential, kind = 0, sick, floor, size = 44 }: PersonProps) {
+  const elderly = kind === 1
+  const infant = kind === 2
+  const left = infant && floor ? -28 : -16
+  const width = 32 - (left + 16)
+  const face = elderly && sick ? 'dizzy' : mood
+  return (
+    <svg viewBox={`${left} -15 ${width} 44`} width={(size * width) / 44} height={size} aria-hidden className="person-svg">
+      <g transform={elderly && sick ? 'rotate(14 0 28)' : undefined}>
+        <path d="M-11 28v-6a11 11 0 0 1 22 0v6z" strokeWidth={1.2} style={{ fill: color, stroke: 'var(--surface)' }} />
+        <FaceShape mood={face} />
+        {elderly && <WhiteHair />}
+      </g>
+      {elderly && <Cane fallen={sick} />}
+      {elderly && sick && (
+        <g fill="#5aa9e6">
+          <path d="M-5-9q-1.6 2.4 0 3.2 1.6-.8 0-3.2z" />
+          <path d="M19-6q-1.4 2 0 2.8 1.4-.8 0-2.8z" />
+        </g>
+      )}
+      {infant && <Baby onFloor={floor} />}
       {preferential && (
         <g transform="translate(9 -10)">
           <circle r={5.5} fill="#ffffff" stroke="#c98500" strokeWidth={1} />

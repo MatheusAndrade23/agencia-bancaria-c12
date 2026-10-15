@@ -55,11 +55,16 @@ export const C_LOCK2 = 15
 export const C_WAIT2 = 16
 export const C_ACQ2 = 17
 export const C_RELEASE = 18
-const CLIENT_STRIDE = 20
+export const C_KIND = 19 // 0 comum, 1 idoso, 2 com criança de colo
+export const C_GAVE_UP = 20 // instante da desistência (chegada + paciência)
+export const C_SICK = 21 // instante em que o idoso passou mal
+export const C_FLOOR = 22 // instante em que a criança foi colocada no chão
+const CLIENT_STRIDE = 24
 
 export const CLIENT_WAITING = 0
 export const CLIENT_TAKEN = 1
 export const CLIENT_DONE = 2
+export const CLIENT_GAVE_UP = 3 // foi embora sem ser atendido
 
 // --- log de escritas: [tempo, conta, novoSaldo, deltaEsperado] ---
 export const LOG_STRIDE = 4
@@ -119,6 +124,7 @@ export function createSharedMemory(layout: Layout, initialBalance: number, clien
     mem[base + C_TO] = client.to
     mem[base + C_AMOUNT] = client.amount
     mem[base + C_DURATION] = client.durationUs
+    mem[base + C_KIND] = client.kind
   })
   return mem
 }

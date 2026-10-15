@@ -6,7 +6,7 @@ import {
   ALGORITHMS, ALGORITHM_LABEL, LOCK_MODES, LOCK_MODE_LABEL, formatMoney,
   type Metrics, type RunRecord,
 } from '../sim/types'
-import { formatMs, usePalette } from './theme'
+import { formatMs, formatNumber, usePalette } from './theme'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -149,10 +149,15 @@ function ChartCard({ title, subtitle, labels, series, format }: ChartCardProps) 
 /** Gráficos de barras do cenário selecionado. Só execuções concluídas entram nas médias. */
 export function ComparisonCharts({ runs }: { runs: RunRecord[] }) {
   const completed = useMemo(() => runs.filter((run) => run.status === 'completed'), [runs])
-  const byAlgorithm = (value: (m: Metrics) => number) =>
-    ALGORITHMS.map((alg) => meanAndSd(completed.filter((run) => run.algorithm === alg).map((run) => value(run.metrics))))
-  const byLock = (value: (m: Metrics) => number) =>
-    LOCK_MODES.map((mode) => meanAndSd(completed.filter((run) => run.lockMode === mode).map((run) => value(run.metrics))))
+  // execuções antigas não têm as métricas de satisfação: ficam de fora dessas médias
+  const valuesOf = (list: RunRecord[], value: (m: Metrics) => number | undefined) =>
+    list.map((run) => value(run.metrics)).filter((v): v is number => v !== undefined)
+  const byAlgorithm = (value: (m: Metrics) => number | undefined) =>
+    ALGORITHMS.map((alg) => meanAndSd(valuesOf(completed.filter((run) => run.algorithm === alg), value)))
+  const byLock = (value: (m: Metrics) => number | undefined) =>
+    LOCK_MODES.map((mode) => meanAndSd(valuesOf(completed.filter((run) => run.lockMode === mode), value)))
+  const points = (v: number) => formatNumber(v, 1)
+  const count = (v: number) => formatNumber(v, 1)
   const algorithmLabels = ALGORITHMS.map((alg) => ALGORITHM_LABEL[alg])
   const lockLabels = LOCK_MODES.map((mode) => LOCK_MODE_LABEL[mode])
   const money = (cents: number) => formatMoney(Math.round(cents))
@@ -196,6 +201,35 @@ export function ComparisonCharts({ runs }: { runs: RunRecord[] }) {
           labels={lockLabels}
           series={[{ label: 'Dinheiro inconsistente', stats: byLock((m) => Math.abs(m.inconsistentCents)) }]}
           format={money}
+        />
+        <ChartCard
+          title="Satisfação: preferenciais vs. comuns"
+          subtitle="índice de 0 a 100 pelo tempo de espera, desistências e eventos"
+          labels={algorithmLabels}
+          series={[
+            { label: 'Geral', stats: byAlgorithm((m) => m.satisfaction) },
+            { label: 'Preferenciais', stats: byAlgorithm((m) => m.satisfactionPref) },
+            { label: 'Comuns', stats: byAlgorithm((m) => m.satisfactionCommon) },
+          ]}
+          format={points}
+        />
+        <ChartCard
+          title="Desistências e eventos por algoritmo"
+          subtitle="clientes que foram embora, idosos que passaram mal e crianças no chão"
+          labels={algorithmLabels}
+          series={[
+            { label: 'Desistências', stats: byAlgorithm((m) => m.gaveUp) },
+            { label: 'Idosos passaram mal', stats: byAlgorithm((m) => m.elderlySick) },
+            { label: 'Crianças no chão', stats: byAlgorithm((m) => m.infantFloor) },
+          ]}
+          format={count}
+        />
+        <ChartCard
+          title="Satisfação por modo de sincronismo"
+          subtitle="dinheiro errado na conta corta a nota do cliente pela metade"
+          labels={lockLabels}
+          series={[{ label: 'Índice de satisfação', stats: byLock((m) => m.satisfaction) }]}
+          format={points}
         />
       </div>
     </section>

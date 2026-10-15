@@ -60,7 +60,7 @@ function ArrivalStreet({ clients }: { clients: Client[] }) {
       <div className="street-crowd" style={{ height: lanes * LANE_HEIGHT + 6 }}>
         {placed.map(({ client, x, lane }) => (
           <div key={client.id} className="street-person" style={{ left: x, bottom: lane * LANE_HEIGHT + 4 }} title={clientTitle(client)}>
-            <Person mood="happy" color={palette.ops[client.op]} preferential={client.priority === 1} size={34} />
+            <Person mood="happy" color={palette.ops[client.op]} preferential={client.priority === 1} kind={client.kind} size={34} />
             <span>{client.id}</span>
           </div>
         ))}
@@ -228,6 +228,9 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
               <Person mood="happy" color="var(--brand)" preferential size={56} />
               <strong>{stats.preferential}</strong>
               <span className="muted small">preferenciais</span>
+              <span className="muted small">
+                {clients.filter((c) => c.kind === 1).length} idosos · {clients.filter((c) => c.kind === 2).length} com criança de colo
+              </span>
             </div>
             <div className="priority-bar" role="img" aria-label={`${stats.preferential} preferenciais e ${common} comuns`}>
               <span className="priority-pref" style={{ flexGrow: Math.max(stats.preferential, 0.001) }} />
@@ -241,7 +244,8 @@ export function QueuePage({ config, clients, scenarioName, onGoToSimulation }: P
           </div>
           <p className="muted small">
             Na Prioridade pura, os comuns só são chamados quando não há preferencial esperando. Com aging, quem espera muito
-            sobe de prioridade.
+            sobe de prioridade. Quem espera {formatMs(config.patienceMs)} sem ser chamado vai embora; o idoso passa mal com{' '}
+            {formatMs(config.patienceMs * 0.6)} de espera e a criança de colo vai para o chão com {formatMs(config.patienceMs * 0.4)}.
           </p>
         </section>
       </div>
