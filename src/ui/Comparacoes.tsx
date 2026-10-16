@@ -28,11 +28,13 @@ interface MetricOption {
 }
 
 const METRIC_OPTIONS: MetricOption[] = [
+  { key: 'profit', label: 'Lucro da execução', value: (m) => m.profitCents, format: (v) => formatMoney(Math.round(v)) },
   { key: 'reputation', label: 'Reputação da empresa (−100 a +100)', value: (m) => m.reputation, format: (v) => formatReputation(v) },
   { key: 'satisfaction', label: 'Índice de satisfação (0 a 100)', value: (m) => m.satisfaction, format: (v) => formatNumber(v, 1) },
   { key: 'satisfactionCommon', label: 'Satisfação dos comuns', value: (m) => m.satisfactionCommon, format: (v) => formatNumber(v, 1) },
   { key: 'satisfactionPref', label: 'Satisfação dos preferenciais', value: (m) => m.satisfactionPref, format: (v) => formatNumber(v, 1) },
   { key: 'gaveUp', label: 'Desistências', value: (m) => m.gaveUp, format: (v) => formatNumber(v, 1) },
+  { key: 'overtakes', label: 'Vezes que alguém viu um comum passar na frente', value: (m) => m.overtakes, format: (v) => formatNumber(v, 1) },
   { key: 'disturbed', label: 'Clientes incomodados por incidentes', value: (m) => m.disturbed, format: (v) => formatNumber(v, 1) },
   { key: 'events', label: 'Idosos que passaram mal + crianças no chão', value: (m) => (m.elderlySick === undefined ? undefined : m.elderlySick + (m.infantFloor ?? 0)), format: (v) => formatNumber(v, 1) },
   { key: 'mood', label: 'Humor médio (0 feliz a 4 furioso)', value: (m) => m.moodAvg, format: (v) => formatNumber(v, 2) },
@@ -50,7 +52,7 @@ const METRIC_OPTIONS: MetricOption[] = [
   { key: 'money', label: 'Dinheiro inconsistente (módulo)', value: (m) => Math.abs(m.inconsistentCents), format: (v) => formatMoney(Math.round(v)) },
 ]
 
-type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'reputation' | 'satisfaction' | 'gaveUp' | 'events' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
+type SortKey = 'date' | 'scenario' | 'algorithm' | 'lock' | 'status' | 'profit' | 'reputation' | 'satisfaction' | 'gaveUp' | 'events' | 'makespan' | 'wait' | 'waitPref' | 'waitCommon' | 'turnaround' | 'throughput' | 'lockWait' | 'rho' | 'littleLq' | 'money' | 'wrong'
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunRecord): number | string; render(run: RunRecord): React.ReactNode }[] = [
   { key: 'date', label: 'Data', value: (r) => r.createdAt, render: (r) => new Date(r.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) },
@@ -58,6 +60,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean; value(run: RunR
   { key: 'algorithm', label: 'Algoritmo', value: (r) => ALGORITHMS.indexOf(r.algorithm), render: (r) => ALGORITHM_LABEL[r.algorithm] },
   { key: 'lock', label: 'Sincronismo', value: (r) => LOCK_MODES.indexOf(r.lockMode), render: (r) => LOCK_MODE_LABEL[r.lockMode] },
   { key: 'status', label: 'Status', value: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
+  { key: 'profit', label: 'Lucro', numeric: true, value: (r) => r.metrics.profitCents ?? -1e12, render: (r) => (r.metrics.profitCents === undefined ? '-' : <span className={r.metrics.profitCents < 0 ? 'bad' : ''}>{formatMoney(Math.round(r.metrics.profitCents))}</span>) },
   { key: 'reputation', label: 'Reputação', numeric: true, value: (r) => r.metrics.reputation ?? -1000, render: (r) => (r.metrics.reputation === undefined ? '-' : <span className={r.metrics.reputation < -10 ? 'bad' : ''}>{formatReputation(r.metrics.reputation)}</span>) },
   { key: 'satisfaction', label: 'Satisfação', numeric: true, value: (r) => r.metrics.satisfaction ?? -1, render: (r) => (r.metrics.satisfaction === undefined ? '-' : <span title={`mediana ${formatNumber(r.metrics.satisfactionMedian ?? 0, 1)} · P10 ${formatNumber(r.metrics.satisfactionP10 ?? 0, 1)}`}>{formatNumber(r.metrics.satisfaction, 1)}</span>) },
   { key: 'gaveUp', label: 'Desistências', numeric: true, value: (r) => r.metrics.gaveUp ?? -1, render: (r) => (r.metrics.gaveUp === undefined ? '-' : <span className={r.metrics.gaveUp ? 'bad' : ''}>{r.metrics.gaveUp}</span>) },
@@ -414,6 +417,8 @@ interface RankingRow {
   total: number
   deadlocks: number
   n: number
+  profitCents: number
+  reimbursementCents: number
   reputation: number
   satisfaction: number
   common: number
@@ -424,8 +429,8 @@ interface RankingRow {
 }
 
 /**
- * Ranking das combinações do cenário: a que deixa a empresa com melhor reputação vem primeiro,
- * com a satisfação desempatando. Combinações que travaram em deadlock em todas as tentativas vão para o fim.
+ * Ranking das combinações do cenário: a que dá mais lucro ao banco vem primeiro, com a reputação
+ * desempatando. Combinações que travaram em deadlock em todas as tentativas vão para o fim.
  */
 function Ranking({ runs }: { runs: RunRecord[] }) {
   const rows: RankingRow[] = []
@@ -433,7 +438,7 @@ function Ranking({ runs }: { runs: RunRecord[] }) {
     for (const lockMode of LOCK_MODES) {
       const all = runs.filter((run) => run.algorithm === algorithm && run.lockMode === lockMode)
       if (all.length === 0) continue
-      const measured = all.filter((run) => run.status === 'completed' && run.metrics.reputation !== undefined)
+      const measured = all.filter((run) => run.status === 'completed' && run.metrics.profitCents !== undefined)
       const avg = (value: (m: Metrics) => number | undefined) => meanAndSd(measured.map((run) => value(run.metrics) ?? 0)).mean
       rows.push({
         algorithm,
@@ -441,6 +446,8 @@ function Ranking({ runs }: { runs: RunRecord[] }) {
         total: all.length,
         deadlocks: all.filter((run) => run.status === 'deadlock').length,
         n: measured.length,
+        profitCents: avg((m) => m.profitCents),
+        reimbursementCents: avg((m) => m.reimbursementCents),
         reputation: avg((m) => m.reputation),
         satisfaction: avg((m) => m.satisfaction),
         common: avg((m) => m.satisfactionCommon),
@@ -451,22 +458,22 @@ function Ranking({ runs }: { runs: RunRecord[] }) {
       })
     }
   }
-  rows.sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || b.reputation - a.reputation || b.satisfaction - a.satisfaction)
+  rows.sort((a, b) => (b.n > 0 ? 1 : 0) - (a.n > 0 ? 1 : 0) || b.profitCents - a.profitCents || b.reputation - a.reputation)
   const best = rows.find((row) => row.n > 0)
 
   return (
     <section className="panel">
       <header className="panel-header">
         <h2>Qual combinação escolher</h2>
-        <span className="muted">ordenado pela reputação da empresa; a satisfação desempata</span>
+        <span className="muted">ordenado pelo lucro médio; a reputação desempata</span>
       </header>
       {!best ? (
-        <p className="empty">Rode o cenário com a versão atual para medir satisfação e reputação (execuções antigas não têm essas métricas).</p>
+        <p className="empty">Rode o cenário com a versão atual para medir o lucro (execuções antigas não têm essa métrica).</p>
       ) : (
         <>
           <p className="ranking-best">
-            <Icon name="check" size={16} /> Melhor neste cenário: <strong>{ALGORITHM_LABEL[best.algorithm]} × {LOCK_MODE_LABEL[best.lockMode]}</strong>, com reputação{' '}
-            {formatReputation(best.reputation)} e satisfação {formatNumber(best.satisfaction, 1)}
+            <Icon name="check" size={16} /> Melhor neste cenário: <strong>{ALGORITHM_LABEL[best.algorithm]} × {LOCK_MODE_LABEL[best.lockMode]}</strong>, com lucro de{' '}
+            {formatMoney(Math.round(best.profitCents))}, reputação {formatReputation(best.reputation)} e satisfação {formatNumber(best.satisfaction, 1)}
             {best.n > 1 ? ` (média de ${best.n} execuções)` : ''}.
           </p>
           <div className="table-scroll">
@@ -475,6 +482,8 @@ function Ranking({ runs }: { runs: RunRecord[] }) {
                 <tr>
                   <th>#</th>
                   <th>Combinação</th>
+                  <th className="num">Lucro</th>
+                  <th className="num">Ressarcimento</th>
                   <th className="num">Reputação</th>
                   <th className="num">Satisfação</th>
                   <th className="num">Comuns</th>
@@ -501,8 +510,10 @@ function Ranking({ runs }: { runs: RunRecord[] }) {
                     {row.n > 0 ? (
                       <>
                         <td className="num">
-                          <strong>{formatReputation(row.reputation)}</strong>
+                          <strong className={row.profitCents < 0 ? 'bad' : ''}>{formatMoney(Math.round(row.profitCents))}</strong>
                         </td>
+                        <td className="num">{row.reimbursementCents > 0 ? `−${formatMoney(Math.round(row.reimbursementCents))}` : '-'}</td>
+                        <td className="num">{formatReputation(row.reputation)}</td>
                         <td className="num">{formatNumber(row.satisfaction, 1)}</td>
                         <td className="num">{formatNumber(row.common, 1)}</td>
                         <td className="num">{formatNumber(row.gaveUp, 1)}</td>
@@ -510,7 +521,7 @@ function Ranking({ runs }: { runs: RunRecord[] }) {
                         <td className="num">{formatMs(row.makespanMs)}</td>
                       </>
                     ) : (
-                      <td colSpan={6} className="muted small">
+                      <td colSpan={8} className="muted small">
                         sem execução concluída com as métricas novas
                       </td>
                     )}

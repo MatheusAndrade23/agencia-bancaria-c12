@@ -130,6 +130,34 @@ function ReputationRow({ m }: { m: RunRecord['metrics'] }) {
   )
 }
 
+/** Lucro da execução: o que entrou com os atendimentos e o que se perdeu com clientes e ressarcimento. */
+export function ProfitPanel({ run }: { run: RunRecord }) {
+  const m = run.metrics
+  if (m.profitCents === undefined || m.revenueCents === undefined || m.churnLossCents === undefined || m.reimbursementCents === undefined) return null
+  const parts: [string, number, string][] = [
+    ['Receita dos atendimentos', m.revenueCents, 'tarifas e juros das operações concluídas'],
+    ['Clientes que trocam de banco', -m.churnLossCents, 'perda esperada: chance × R$ 100 por cliente'],
+    ['Ressarcimento', -m.reimbursementCents, 'dinheiro inconsistente que o banco devolve'],
+  ]
+  return (
+    <div className={`profit ${m.profitCents >= 0 ? 'profit-good' : 'profit-bad'}`}>
+      <div className="profit-head">
+        <span className="small muted">Lucro da execução</span>
+        <strong>{formatMoney(Math.round(m.profitCents))}</strong>
+      </div>
+      <div className="profit-parts">
+        {parts.map(([label, cents, hint]) => (
+          <div key={label}>
+            <span className="small muted">{label}</span>
+            <strong className={cents < 0 ? 'bad' : ''}>{cents < 0 ? `−${formatMoney(Math.round(-cents))}` : formatMoney(Math.round(cents))}</strong>
+            <small className="muted">{hint}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Índice de satisfação, humor e o que aconteceu na fila (desistências e eventos). */
 export function SatisfactionPanel({ run }: { run: RunRecord }) {
   const m = run.metrics
@@ -179,6 +207,11 @@ export function SatisfactionPanel({ run }: { run: RunRecord }) {
         <span>
           <Icon name="baby" size={14} /> {m.infantFloor ?? 0} crianças no chão
         </span>
+        {m.overtakes !== undefined && (
+          <span>
+            <Icon name="users" size={14} /> {m.overtakenClients ?? 0} viram alguém passar na frente ({m.overtakes} vezes)
+          </span>
+        )}
         <span className="muted">paciência de {formatMs(m.patienceMs ?? run.config.patienceMs)}</span>
       </div>
       <ReputationRow m={m} />
@@ -205,6 +238,7 @@ export function MetricsSummary({ run }: { run: RunRecord }) {
   ]
   return (
     <div className="metrics">
+      <ProfitPanel run={run} />
       <SatisfactionPanel run={run} />
       <LittlePanel run={run} />
       <dl className="metric-grid">

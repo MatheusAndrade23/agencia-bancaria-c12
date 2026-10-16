@@ -12,11 +12,18 @@
 // - criança no chão: no máximo FLOOR_CAP;
 // - desistiu ou idoso que passou mal: 0.
 // - incômodo coletivo: quem está na agência quando um idoso passa mal tem a nota × SICK_WITNESS_FACTOR,
-//   e quando uma criança vai para o chão, × FLOOR_WITNESS_FACTOR (acumulam, com piso CONTAGION_FLOOR).
+//   e quando uma criança vai para o chão, × FLOOR_WITNESS_FACTOR (acumulam, com piso CONTAGION_FLOOR);
+// - furar a fila: cada cliente comum chamado antes dele, tendo chegado depois, enquanto ele ainda
+//   esperava: × OVERTAKE_FACTOR (acumulam, com piso OVERTAKE_FLOOR). Preferencial passando na frente
+//   não incomoda, porque é lei.
 // Índice da execução = 100 × média das notas, com mediana e percentil 10 ao lado.
 //
 // Reputação da empresa (de −100 a +100): % promotores − % detratores, menos REPUTATION_SICK_PENALTY por
 // idoso que passou mal e REPUTATION_MONEY_PENALTY se alguma conta terminou com saldo errado.
+//
+// Lucro da execução, em centavos: receita dos atendimentos concluídos com sucesso, menos a perda esperada
+// com clientes que trocam de banco (chance que cresce quando a nota fica abaixo de CHURN_SAFE_SCORE), menos
+// o ressarcimento do dinheiro inconsistente (soma, por conta, do módulo da diferença entre real e esperado).
 
 import {
   KIND_ELDERLY, KIND_INFANT, OP_LOAN, OP_TRANSFER, RESULT_OK, RESULT_REFUSED,
@@ -37,6 +44,17 @@ export const PROMOTER_MIN = 0.8
 export const DETRACTOR_BELOW = 0.5
 export const REPUTATION_SICK_PENALTY = 10
 export const REPUTATION_MONEY_PENALTY = 20
+export const OVERTAKE_FACTOR = 0.97
+/** furar a fila nunca tira mais que 30% da nota */
+export const OVERTAKE_FLOOR = 0.7
+/** receita de cada operação concluída com sucesso, em centavos: DEP, SAQ, TRF, BOL, FIN */
+export const REVENUE_CENTS = [100, 100, 200, 150, 4000]
+/** quanto um cliente vale para o banco por ano, em centavos */
+export const CLIENT_VALUE_CENTS = 10_000
+/** a partir dessa nota o cliente não troca de banco: feliz e muito feliz valem o mesmo */
+export const CHURN_SAFE_SCORE = 0.6
+/** chance de trocar de banco com nota 0 (inclui quem desistiu) */
+export const CHURN_MAX = 0.5
 /** fração dos preferenciais que são idosos; o resto está com criança de colo */
 export const ELDERLY_SHARE = 0.6
 
@@ -74,6 +92,18 @@ export interface ScoreInput {
   sawSick?: number
   /** quantas crianças indo para o chão o cliente viu */
   sawFloor?: number
+  /** quantos clientes comuns que chegaram depois foram chamados antes dele */
+  overtaken?: number
+}
+
+/** Fator de furar a fila: cada vez que alguém passa na frente, com piso. */
+export function overtakeFactor(overtaken: number): number {
+  return Math.max(OVERTAKE_FLOOR, OVERTAKE_FACTOR ** overtaken)
+}
+
+/** Chance de o cliente trocar de banco: 0 a partir de CHURN_SAFE_SCORE, subindo até CHURN_MAX na nota 0. */
+export function churnChance(score: number): number {
+  return score >= CHURN_SAFE_SCORE ? 0 : CHURN_MAX * (1 - score / CHURN_SAFE_SCORE)
 }
 
 /** Fator do incômodo coletivo: os descontos se multiplicam, com piso. */
@@ -87,7 +117,7 @@ export function clientScore(input: ScoreInput, patience: number): number {
   if (input.wrongMoney) score *= WRONG_MONEY_FACTOR
   if (input.refused) score *= REFUSED_FACTOR
   if (input.floor) score = Math.min(score, FLOOR_CAP)
-  return score * contagionFactor(input.sawSick ?? 0, input.sawFloor ?? 0)
+  return score * contagionFactor(input.sawSick ?? 0, input.sawFloor ?? 0) * overtakeFactor(input.overtaken ?? 0)
 }
 
 export interface Reputation {
@@ -136,6 +166,9 @@ export interface ClientOutcome {
   wrongMoney: boolean
   sawSick: number
   sawFloor: number
+  overtaken: number
+  /** atendimento concluído com sucesso (gera receita) */
+  approved: boolean
   mood: MoodLevel
   /** nota de 0 a 1; null enquanto o atendimento não termina */
   score: number | null
@@ -202,6 +235,12 @@ export function outcomesAt(config: ScenarioConfig, clients: Client[], timeline: 
     const own = incidents.filter((incident) => incident.victim === i)
     // incômodo coletivo: eventos de outros clientes enquanto este estava dentro da agência
     const seen = incidents.filter((incident) => incident.victim !== i && stay.arrivalUs <= incident.atUs && incident.atUs < stay.leaveUs)
+    // furar a fila: comuns que chegaram depois e foram chamados enquanto este ainda esperava
+    let overtaken = 0
+    stays.forEach((other, j) => {
+      if (!other?.called || clients[j].priority === 1 || other.arrivalUs <= stay.arrivalUs) return
+      if (timeline.clients[j].startUs < stay.waitEndUs) overtaken++
+    })
     const finished = stay.called && trace.endUs > 0 && trace.endUs <= tUs
     const refused = finished && trace.result === RESULT_REFUSED
     const moved = finished && trace.result === RESULT_OK && client.op !== OP_LOAN
@@ -215,6 +254,7 @@ export function outcomesAt(config: ScenarioConfig, clients: Client[], timeline: 
       wrongMoney: !!wrongMoney,
       sawSick: seen.filter((incident) => incident.kind === 'sick').length,
       sawFloor: seen.filter((incident) => incident.kind === 'floor').length,
+      overtaken,
     }
     outcomes.push({
       index: i,
@@ -226,6 +266,8 @@ export function outcomesAt(config: ScenarioConfig, clients: Client[], timeline: 
       wrongMoney: input.wrongMoney,
       sawSick: input.sawSick!,
       sawFloor: input.sawFloor!,
+      overtaken,
+      approved: finished && trace.result === RESULT_OK,
       mood: moodLevel(waitUs / patience),
       score: stay.gaveUp || finished ? clientScore(input, patience) : null,
     })
@@ -251,13 +293,39 @@ export interface SatisfactionSummary {
   /** clientes que viram pelo menos um incidente dentro da agência */
   disturbed: number
   reputation: Reputation
+  /** total de vezes que alguém viu um comum passar na frente */
+  overtakes: number
+  /** clientes que viram pelo menos um comum passar na frente */
+  overtakenClients: number
+  profit: Profit
+}
+
+export interface Profit {
+  revenueCents: number
+  churnLossCents: number
+  reimbursementCents: number
+  /** receita − perda com troca de banco − ressarcimento */
+  profitCents: number
+}
+
+/** Lucro dos clientes com desfecho: receita, troca de banco esperada e ressarcimento. */
+export function profit(clients: Client[], outcomes: ClientOutcome[], moneyErrorCents: number): Profit {
+  const scored = outcomes.filter((o) => o.score !== null)
+  const revenueCents = scored.reduce((sum, o) => sum + (o.approved ? REVENUE_CENTS[clients[o.index].op] : 0), 0)
+  const churnLossCents = scored.reduce((sum, o) => sum + churnChance(o.score!) * CLIENT_VALUE_CENTS, 0)
+  const reimbursementCents = Math.abs(moneyErrorCents)
+  return { revenueCents, churnLossCents, reimbursementCents, profitCents: revenueCents - churnLossCents - reimbursementCents }
 }
 
 function mean(values: number[]): number {
   return values.reduce((a, b) => a + b, 0) / Math.max(1, values.length)
 }
 
-export function summarize(clients: Client[], outcomes: ClientOutcome[], wrongMoney = false): SatisfactionSummary {
+/**
+ * Resume os desfechos. `moneyErrorCents` é a soma, por conta, do módulo da diferença entre o saldo
+ * real e o esperado: o que o banco teria de ressarcir.
+ */
+export function summarize(clients: Client[], outcomes: ClientOutcome[], moneyErrorCents = 0): SatisfactionSummary {
   const moods = outcomes.map((o) => o.mood)
   const scored = outcomes.filter((o) => o.score !== null)
   const scores = scored.map((o) => o.score! * 100)
@@ -280,6 +348,9 @@ export function summarize(clients: Client[], outcomes: ClientOutcome[], wrongMon
     satisfactionPref: byPriority(1),
     satisfactionCommon: byPriority(0),
     disturbed: outcomes.filter((o) => o.sawSick + o.sawFloor > 0).length,
-    reputation: reputation(scored.map((o) => o.score!), outcomes.filter((o) => o.sick).length, wrongMoney),
+    reputation: reputation(scored.map((o) => o.score!), outcomes.filter((o) => o.sick).length, moneyErrorCents !== 0),
+    overtakes: outcomes.reduce((sum, o) => sum + o.overtaken, 0),
+    overtakenClients: outcomes.filter((o) => o.overtaken > 0).length,
+    profit: profit(clients, outcomes, moneyErrorCents),
   }
 }

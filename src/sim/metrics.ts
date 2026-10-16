@@ -69,7 +69,8 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
 
   // satisfação: desfecho de cada cliente até o fim, com as contas que terminaram erradas
   const wrong = expected.map((value, a) => value !== timeline.balances[a])
-  const s = summarize(clients, outcomesAt(config, clients, timeline, makespanUs, wrong), wrong.some(Boolean))
+  const moneyErrorCents = expected.reduce((sum, value, a) => sum + Math.abs((timeline.balances[a] ?? value) - value), 0)
+  const s = summarize(clients, outcomesAt(config, clients, timeline, makespanUs, wrong), moneyErrorCents)
 
   return {
     makespanMs: makespanUs / 1000,
@@ -115,6 +116,12 @@ export function computeMetrics(config: ScenarioConfig, clients: Client[], timeli
     promoters: s.reputation.promoters,
     neutrals: s.reputation.neutrals,
     detractors: s.reputation.detractors,
+    overtakes: s.overtakes,
+    overtakenClients: s.overtakenClients,
+    revenueCents: s.profit.revenueCents,
+    churnLossCents: s.profit.churnLossCents,
+    reimbursementCents: s.profit.reimbursementCents,
+    profitCents: s.profit.profitCents,
   }
 }
 

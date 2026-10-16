@@ -75,7 +75,8 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
   // índice de satisfação ao vivo: só quem já foi atendido ou desistiu até o instante t
   const live = useMemo(() => {
     const wrong = view.accounts.map((account) => account.balance !== account.expected)
-    return summarize(clients, outcomesAt(config, clients, timeline, tUs, wrong), wrong.some(Boolean))
+    const moneyError = view.accounts.reduce((sum, account) => sum + Math.abs(account.balance - account.expected), 0)
+    return summarize(clients, outcomesAt(config, clients, timeline, tUs, wrong), moneyError)
   }, [config, clients, timeline, tUs, view.accounts])
 
   const { w, h } = size
@@ -273,6 +274,10 @@ export function Palco({ config, clients, lockMode, timeline, view, tUs, fxUs, de
               </span>
               <span className="small">
                 <Icon name="alert" size={13} /> {live.elderlySick} passaram mal · <Icon name="baby" size={13} /> {live.infantFloor} no chão
+              </span>
+              <span className="small">
+                <Icon name="banknote" size={13} /> lucro{' '}
+                <strong className={live.profit.profitCents < 0 ? 'bad' : ''}>{formatMoney(Math.round(live.profit.profitCents))}</strong>
               </span>
             </div>
           </div>

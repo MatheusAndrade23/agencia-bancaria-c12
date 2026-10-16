@@ -34,7 +34,7 @@ const errorBars: Plugin<'bar'> = {
         const stat = stats[i]
         if (!stat || stat.n < 2 || stat.sd === 0) return
         const top = chart.scales.y.getPixelForValue(stat.mean + stat.sd)
-        const bottom = chart.scales.y.getPixelForValue(Math.max(0, stat.mean - stat.sd))
+        const bottom = chart.scales.y.getPixelForValue(stat.mean >= 0 ? Math.max(0, stat.mean - stat.sd) : stat.mean - stat.sd)
         ctx.save()
         ctx.strokeStyle = String((dataset as unknown as { errorColor?: string }).errorColor ?? '#000')
         ctx.lineWidth = 1.5
@@ -171,6 +171,23 @@ export function ComparisonCharts({ runs }: { runs: RunRecord[] }) {
         </span>
       </header>
       <div className="chart-grid">
+        <ChartCard
+          title="Lucro por algoritmo"
+          subtitle="receita menos clientes que trocam de banco e ressarcimento"
+          labels={algorithmLabels}
+          series={[{ label: 'Lucro', stats: byAlgorithm((m) => m.profitCents) }]}
+          format={money}
+        />
+        <ChartCard
+          title="Lucro por modo de sincronismo"
+          subtitle="no sem lock, o ressarcimento do dinheiro errado sai do lucro"
+          labels={lockLabels}
+          series={[
+            { label: 'Lucro', stats: byLock((m) => m.profitCents) },
+            { label: 'Ressarcimento', stats: byLock((m) => m.reimbursementCents) },
+          ]}
+          format={money}
+        />
         <ChartCard
           title="Espera média por algoritmo"
           subtitle="tempo na fila até ser chamado"

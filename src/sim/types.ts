@@ -218,6 +218,17 @@ export interface Metrics {
   promoters?: number
   neutrals?: number
   detractors?: number
+  /** vezes que um cliente na fila viu um comum que chegou depois ser chamado antes */
+  overtakes?: number
+  overtakenClients?: number
+  // --- lucro da execução, em centavos ---
+  revenueCents?: number
+  /** perda esperada com clientes que trocam de banco */
+  churnLossCents?: number
+  /** ressarcimento do dinheiro inconsistente (soma por conta do módulo da diferença) */
+  reimbursementCents?: number
+  /** receita − troca de banco − ressarcimento */
+  profitCents?: number
 }
 
 export interface RunRecord {

@@ -11,7 +11,7 @@ import { Cofres } from './Cofres'
 import { DeadlockPanel } from './DeadlockPanel'
 import { Fila } from './Fila'
 import { Gantt } from './Gantt'
-import { LittlePanel, MetricsSummary, SatisfactionPanel, StatusBadge } from './MetricsSummary'
+import { LittlePanel, MetricsSummary, ProfitPanel, SatisfactionPanel, StatusBadge } from './MetricsSummary'
 import { Palco } from './Palco'
 import { Icon } from './icons'
 import { formatMs } from './theme'
@@ -326,7 +326,7 @@ export function SimulationPage({ config, scenarioName, clients, isolated, onRunF
           tUs={current.tUs}
           fxUs={current.fxUs}
           deadlock={deadlock}
-          summary={record && atEnd && record.status === 'completed' ? <><SatisfactionPanel run={record} /><LittlePanel run={record} compact /></> : undefined}
+          summary={record && atEnd && record.status === 'completed' ? <><ProfitPanel run={record} /><SatisfactionPanel run={record} /><LittlePanel run={record} compact /></> : undefined}
           header={
             playbackInfo ?? (
               <div className="playback-info">

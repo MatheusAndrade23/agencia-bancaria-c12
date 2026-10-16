@@ -153,6 +153,7 @@ Cada cliente recebe uma nota de 0 a 1:
 4. Criança colocada no chão: a nota fica limitada a 0,6.
 5. Desistiu, ou idoso que passou mal: nota 0.
 6. Incômodo coletivo: quem está dentro da agência (na fila ou sendo atendido) no instante em que um idoso passa mal tem a nota multiplicada por 0,8; quando uma criança vai para o chão, por 0,9. Os descontos se acumulam, com piso: o incômodo nunca tira mais que metade da nota. A própria vítima não conta como testemunha.
+7. Furar a fila: cada cliente comum que chegou depois e foi chamado enquanto este ainda esperava multiplica a nota por 0,97. Os descontos se acumulam, com piso: furar a fila nunca tira mais que 30% da nota. Preferencial passando na frente não incomoda, porque é lei.
 
 ```
 índice = 100 × média das notas
@@ -199,9 +200,34 @@ O resultado fica entre −100 e +100. É aqui que o dinheiro inconsistente pesa 
 
 No exemplo acima (já com o incômodo coletivo) há 4 promotores, 1 neutro e 5 detratores: 40% − 50% = −10. O idoso que passou mal tira 10 e a conta errada do cliente 8 tira 20. Reputação: −40.
 
+### Lucro da execução
+
+As métricas acima viram uma conta em reais, do ponto de vista do dono do banco. Ela não tenta favorecer nem punir nenhum algoritmo: só soma o que entrou e o que se perdeu.
+
+Receita de cada atendimento concluído com sucesso (operação recusada e desistência não geram receita):
+
+| Operação | Receita |
+|---|---|
+| Depósito | R$ 1,00 |
+| Saque | R$ 1,00 |
+| Boleto | R$ 1,50 (tarifa) |
+| Transferência | R$ 2,00 (tarifa) |
+| Financiamento aprovado | R$ 40,00 (juros) |
+
+Perdas:
+
+1. Clientes que trocam de banco. Cada cliente vale R$ 100 por ano. Com nota a partir de 0,6 a chance de trocar de banco é zero, então feliz e muito feliz valem o mesmo. Abaixo disso a chance sobe em linha reta até 50% na nota 0, que inclui quem desistiu. A perda é a soma de chance × R$ 100.
+2. Ressarcimento. O banco cobre o dinheiro inconsistente: para cada conta, o módulo da diferença entre o saldo real e o esperado. Dinheiro que sumiu é devolvido ao cliente, e dinheiro que apareceu foi sacado por quem não tinha.
+
+```
+lucro = receita − perda com troca de banco − ressarcimento
+```
+
+O lucro aparece no resumo da execução, ao vivo no palco, na tabela, na matriz e em dois gráficos da aba Comparações (por algoritmo e por sincronismo, com o ressarcimento ao lado).
+
 ### Qual combinação escolher
 
-O índice e a reputação aparecem no resumo da execução, na tabela, na matriz e nos gráficos da aba Comparações, junto com as desistências e os eventos. A aba também traz um ranking das combinações do cenário, ordenado pela reputação média, com a satisfação desempatando. Combinações que travaram em deadlock em todas as tentativas vão para o fim. Para a média ficar estável, rode as 16 combinações algumas vezes. Execuções salvas por versões anteriores não têm essas métricas e aparecem com "-".
+O índice e a reputação aparecem no resumo da execução, na tabela, na matriz e nos gráficos da aba Comparações, junto com as desistências e os eventos. A aba também traz um ranking das combinações do cenário, ordenado pelo lucro médio, com a reputação desempatando. Combinações que travaram em deadlock em todas as tentativas vão para o fim. Para a média ficar estável, rode as 16 combinações algumas vezes. Execuções salvas por versões anteriores não têm essas métricas e aparecem com "-".
 
 ## Algoritmos de escalonamento
 
@@ -282,7 +308,7 @@ Ao detectar, o app encerra os workers, destaca em vermelho os caixas e as contas
 
 ## Métricas
 
-Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little, desistências, idosos que passaram mal, crianças no chão, clientes incomodados por esses incidentes, humor (média, mediana e P90), índice de satisfação (média, mediana, P10, preferenciais e comuns), reputação da empresa (com promotores, neutros e detratores) e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
+Cada execução registra: makespan, espera na fila (média, mínima e máxima), espera média separada entre preferenciais e comuns, turnaround médio, throughput, utilização de cada caixa, tempo esperando lock (por caixa e total), dinheiro inconsistente, número de contas com saldo errado, carga por caixa (ρ), L e Lq do Teorema de Little, desistências, idosos que passaram mal, crianças no chão, clientes incomodados por esses incidentes, vezes em que alguém viu um comum passar na frente, humor (média, mediana e P90), índice de satisfação (média, mediana, P10, preferenciais e comuns), reputação da empresa (com promotores, neutros e detratores), lucro (receita, troca de banco e ressarcimento) e status (concluída, deadlock ou interrompida), além da data, do cenário, do algoritmo, do modo de lock e da configuração completa.
 
 ### Teorema de Little e estabilidade
 
@@ -330,7 +356,7 @@ src/
     watchdog.ts     grafo de espera e detecção de deadlock
     timeline.ts     registro da execução e estado da agência em um instante
     metrics.ts      cálculo das métricas
-    satisfaction.ts paciência, eventos, incômodo coletivo, humor, satisfação e reputação
+    satisfaction.ts paciência, eventos, incômodo, furar a fila, humor, satisfação, reputação e lucro
     engine.ts       sobe os workers, roda o watchdog e monta o resultado
     *.test.ts       testes unitários
   workers/

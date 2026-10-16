@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { computeMetrics, meanAndSd } from './metrics'
 import { DEFAULT_CONFIG } from './queue'
-import { clientScore, contagionFactor, moodLevel, percentile, reputation, timeScore, type ScoreInput } from './satisfaction'
+import {
+  churnChance, clientScore, contagionFactor, moodLevel, outcomesAt, overtakeFactor, percentile, reputation, timeScore,
+  type ScoreInput,
+} from './satisfaction'
 import { closeQueue, packTimeline, unpackTimeline, viewAt } from './timeline'
 import type { Client, ClientTrace, ScenarioConfig, Timeline } from './types'
 
@@ -190,6 +193,40 @@ describe('satisfação', () => {
     expect(reputation([0, 0], 12, true).value).toBe(-100)
   })
 
+  it('furar a fila: cada comum chamado antes, tendo chegado depois, tira 3% da nota', () => {
+    expect(overtakeFactor(0)).toBe(1)
+    expect(overtakeFactor(2)).toBeCloseTo(0.9409)
+    expect(overtakeFactor(50)).toBe(0.7) // piso: nunca tira mais que 30%
+    const three: Client[] = [
+      { id: 0, arrivalUs: 0, priority: 0, op: 0, from: 0, to: -1, amount: 100, durationUs: 10_000, kind: 0 },
+      { id: 1, arrivalUs: 5_000, priority: 0, op: 0, from: 0, to: -1, amount: 100, durationUs: 10_000, kind: 0 },
+      { id: 2, arrivalUs: 6_000, priority: 1, op: 0, from: 1, to: -1, amount: 100, durationUs: 10_000, kind: 1 },
+    ]
+    const passing: Timeline = {
+      endUs: 60_000,
+      finished: true,
+      clients: [
+        trace({ teller: 0, startUs: 30_000, endUs: 40_000, result: 1 }),
+        trace({ teller: 0, startUs: 10_000, endUs: 20_000, result: 1 }), // comum passou na frente do #0
+        trace({ teller: 1, startUs: 8_000, endUs: 18_000, result: 1 }), // preferencial: não incomoda
+      ],
+      writes: [],
+      balances: [1000, 1000],
+    }
+    const out = outcomesAt(config, three, passing, 60_000, [false, false])
+    expect(out.map((o) => o.overtaken)).toEqual([1, 0, 0])
+    const m = computeMetrics({ ...config, clients: 3 }, three, passing)
+    expect(m.overtakes).toBe(1)
+    expect(m.overtakenClients).toBe(1)
+  })
+
+  it('chance de trocar de banco: zero a partir de 0,6 e 50% na nota 0', () => {
+    expect(churnChance(1)).toBe(0)
+    expect(churnChance(0.6)).toBe(0)
+    expect(churnChance(0.3)).toBeCloseTo(0.25)
+    expect(churnChance(0)).toBe(0.5)
+  })
+
   it('conta movimentada com saldo errado derruba a nota pela metade', () => {
     const ok = computeMetrics(config, clients, timeline)
     expect(ok.satisfaction).toBe(100)
@@ -198,5 +235,11 @@ describe('satisfação', () => {
     // reputação: todos promotores sem incidentes; com dinheiro errado, todos neutros e −20 de escândalo
     expect(ok.reputation).toBe(100)
     expect(wrong.reputation).toBe(-20)
+    // lucro: depósito (R$ 1) + transferência (R$ 2), ninguém troca de banco
+    expect(ok.profitCents).toBe(300)
+    // com a conta A R$ 5 abaixo do esperado: nota 0,5 → chance de 0,5 × (1 − 0,5/0,6) de trocar de banco
+    expect(wrong.reimbursementCents).toBe(500)
+    expect(wrong.churnLossCents).toBeCloseTo(2 * (0.5 / 6) * 10_000)
+    expect(wrong.profitCents).toBeCloseTo(300 - 2 * (0.5 / 6) * 10_000 - 500)
   })
 })
